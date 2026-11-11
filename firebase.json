@@ -1,0 +1,8 @@
+{
+  "firestore": [
+    {
+      "database": "ai-studio-android-olguru-334bf297-071a-4c1e-80ca-7a8d41c4e8a2",
+      "rules": "firestore.rules"
+    }
+  ]
+}

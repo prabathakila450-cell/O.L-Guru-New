@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8" standalone="no"?>
+<resources>
+    <string name="firestore_database_id" translatable="false">ai-studio-android-olguru-334bf297-071a-4c1e-80ca-7a8d41c4e8a2</string>
+    <string name="recaptcha_site_key" translatable="false">6LeiIRcuAAAAADvXw5kCYaYDkLgCVZs8Eiz0zgfd</string>
+</resources>

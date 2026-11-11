@@ -1,0 +1,8 @@
+{
+  "name": " O/L Guru New",
+  "description": "Student learning dashboard with grade selection, AI tutor access, and secure study portal",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}

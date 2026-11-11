@@ -1,0 +1,1132 @@
+package com.example
+
+/**
+ * 100 Real-world Spoken Situational Dialogues
+ * Two-way conversations (Speaker A & Speaker B) with accurate Sinhala translations.
+ */
+data class SpokenDialogueItem(
+  val id: String,
+  val title: String,
+  val category: String,
+  val speakerA: String,
+  val textA: String,
+  val sinhalaA: String,
+  val speakerB: String,
+  val textB: String,
+  val sinhalaB: String
+)
+
+object SpokenDialogues100DataBank {
+
+  val dialogues: List<SpokenDialogueItem> = listOf(
+    // 1 - 20: School & Classroom Dialogues
+    SpokenDialogueItem(
+      "dlg_1",
+      "Asking for Permission to Enter Class",
+      "School & Classroom",
+      "Student",
+      "Excuse me, teacher. May I come in, please?",
+      "සමාවෙන්න ගුරුතුමිය. මට ඇතුළට පැමිණීමට අවසරද?",
+      "Teacher",
+      "Yes, please come in and take your seat quietly.",
+      "ඔව්, කරුණාකර ඇතුළට පැමිණ නිශ්ශබ්දව ඔබේ අසුනෙන් වාඩිවන්න."
+    ),
+    SpokenDialogueItem(
+      "dlg_2",
+      "Borrowing an English Notebook",
+      "School & Classroom",
+      "Kamal",
+      "Hi Nimal, could you lend me your English notes for tonight?",
+      "හායි නිමල්, අද රෑට ඔයාගේ ඉංග්‍රීසි සටහන් පොත මට දෙන්න පුළුවන්ද?",
+      "Nimal",
+      "Sure, here you go. Please return it tomorrow morning.",
+      "අනිවාර්යයෙන්ම, මෙන්න ගන්න. කරුණාකර හෙට උදේට මට ආපසු දෙන්න."
+    ),
+    SpokenDialogueItem(
+      "dlg_3",
+      "Clarifying a Grammar Doubt",
+      "School & Classroom",
+      "Kasun",
+      "Sir, I have a doubt regarding question number five.",
+      "සර්, පස්වන ප්‍රශ්නය සම්බන්ධයෙන් මට සැකයක් තිබෙනවා.",
+      "Teacher",
+      "Let me see. In this sentence, the subject is plural, so use 'were'.",
+      "මට බලන්න දෙන්න. මෙම වාක්‍යයේ උක්තය බහුවචන බැවින් 'were' යොදන්න."
+    ),
+    SpokenDialogueItem(
+      "dlg_4",
+      "At the School Library",
+      "School & Classroom",
+      "Student",
+      "Good morning, madam. Where can I find English past paper books?",
+      "සුබ උදෑසනක් මැඩම්. ඉංග්‍රීසි පසුගිය විභාග ප්‍රශ්න පත්‍ර පොත් සොයාගත හැක්කේ කොහෙන්ද?",
+      "Librarian",
+      "They are located on shelf number four, right next to the reference desk.",
+      "ඒවා තිබෙන්නේ හතරවන රාක්කයේ, විමර්ශන මේසය අසලමයි."
+    ),
+    SpokenDialogueItem(
+      "dlg_5",
+      "Submitting an Assignment",
+      "School & Classroom",
+      "Teacher",
+      "Have all of you completed your science assignment?",
+      "ඔබ සැම ඔබේ විද්‍යා පැවරුම සම්පූර්ණ කර අවසන් කළාද?",
+      "Prefect",
+      "Yes, teacher. I have collected all the books in this folder.",
+      "ඔව් ගුරුතුමිය. මම සියලුම පොත් එකතු කර මෙම ෆෝල්ඩරයේ තබා ඇත."
+    ),
+    SpokenDialogueItem(
+      "dlg_6",
+      "Discussing O/L Exam Timetable",
+      "School & Classroom",
+      "Sachin",
+      "Did you check the official O/L timetable released yesterday?",
+      "ඊයේ නිකුත් කළ නිල සාමාන්‍ය පෙළ විභාග කාලසටහන ඔබ බැලුවාද?",
+      "Dinuka",
+      "Yes, our English paper is scheduled for the second week of December.",
+      "ඔව්, අපගේ ඉංග්‍රීසි ප්‍රශ්න පත්‍රය දෙසැම්බර් දෙවන සතියට යොදා තිබෙනවා."
+    ),
+    SpokenDialogueItem(
+      "dlg_7",
+      "In the Chemistry Lab",
+      "School & Classroom",
+      "Lab Instructor",
+      "Always wear your safety goggles before lighting the Bunsen burner.",
+      "බන්සන් දාහකය දැල්වීමට පෙර සෑම විටම ඔබේ ආරක්ෂිත ඇස් කණ්ණාඩි පළඳින්න.",
+      "Student",
+      "Understood, sir. Everything is set up safely.",
+      "තේරුණා සර්. සියල්ල ආරක්ෂිතව සූදානම් කර ඇත."
+    ),
+    SpokenDialogueItem(
+      "dlg_8",
+      "Joining the English Literary Society",
+      "School & Classroom",
+      "Sanduni",
+      "Are you planning to join the English Literary Society this year?",
+      "මේ වසරේ ඉංග්‍රීසි සාහිත්‍ය සංගමයට බැඳීමට ඔබ බලාපොරොත්තු වෙනවාද?",
+      "Ananya",
+      "Definitely! I want to enhance my public speaking and debate skills.",
+      "අනිවාර්යයෙන්ම! මට මගේ කථික හා විවාද කුසලතා දියුණු කරගැනීමට අවශ්‍යයි."
+    ),
+    SpokenDialogueItem(
+      "dlg_9",
+      "Requesting Sick Leave",
+      "School & Classroom",
+      "Parent",
+      "Good morning, teacher. Ruwan was absent yesterday due to a sudden fever.",
+      "සුබ උදෑසනක් ගුරුතුමිය. හදිසි උණක් නිසා රුවන් ඊයේ පාසල් පැමිණියේ නැත.",
+      "Teacher",
+      "I see. Please submit the doctor's medical certificate when he returns.",
+      "හොඳයි. ඔහු නැවත පැමිණි පසු කරුණාකර වෛද්‍ය සහතිකය ඉදිරිපත් කරන්න."
+    ),
+    SpokenDialogueItem(
+      "dlg_10",
+      "At the School Canteen",
+      "School & Classroom",
+      "Student",
+      "Could I have two vegetable pastries and a bottle of mineral water, please?",
+      "කරුණාකර එළවළු පැටිස් දෙකක් සහ වතුර බෝතලයක් ලබාගත හැකිද?",
+      "Canteen Staff",
+      "Certainly. That comes to one hundred and eighty rupees altogether.",
+      "අනිවාර්යයෙන්ම. ඒ සියල්ලටම එකතුව රුපියල් එකසිය අසූවයි."
+    ),
+    SpokenDialogueItem(
+      "dlg_11",
+      "Discussing a Group Presentation",
+      "School & Classroom",
+      "Leader",
+      "Who will be responsible for creating the digital slides?",
+      "ඩිජිටල් ස්ලයිඩ් සකස් කිරීමේ වගකීම භාරගන්නේ කවුද?",
+      "Member",
+      "I have my laptop with me, so I can design the slides this afternoon.",
+      "මගේ ලැප්ටොප් එක මා ළඟ තිබෙන නිසා අද දහවල් මට ඒවා නිර්මාණය කළ හැකියි."
+    ),
+    SpokenDialogueItem(
+      "dlg_12",
+      "Congratulating on Exam Results",
+      "School & Classroom",
+      "Ravi",
+      "Hearty congratulations on getting 95 for mathematics!",
+      "ගණිතයට ලකුණු 95ක් ලබා ගැනීම පිළිබඳව උණුසුම් සුබ පැතුම්!",
+      "Amal",
+      "Thank you so much! Your encouragement really helped me keep practicing.",
+      "බොහොම ස්තූතියි! ඔබේ දිරිගැන්වීම මට දිගටම පුහුණු වීමට මහත් ශක්තියක් වුණා."
+    ),
+    SpokenDialogueItem(
+      "dlg_13",
+      "Lost and Found Inquiry",
+      "School & Classroom",
+      "Student",
+      "Excuse me, has anyone handed in a black water bottle?",
+      "සමාවෙන්න, කිසිවෙකු කළු පැහැති වතුර බෝතලයක් මෙහි භාර දුන්නාද?",
+      "Prefect",
+      "Yes, someone found one near the playground. Check the lost-and-found box.",
+      "ඔව්, ක්‍රීඩා පිටිය අසලින් කෙනෙකුට හමුවී තිබුණා. නැතිවූ බඩු පෙට්ටිය බලන්න."
+    ),
+    SpokenDialogueItem(
+      "dlg_14",
+      "Forming a Science Study Group",
+      "School & Classroom",
+      "Nadeesha",
+      "Would you like to study physics past papers together this Saturday?",
+      "මේ සෙනසුරාදා භෞතික විද්‍යා පසුගිය ප්‍රශ්න පත්‍ර එකට පාඩම් කරන්න ඔබ කැමතිද?",
+      "Kavindi",
+      "That sounds great! We can meet at the public library at nine o'clock.",
+      "එය විශිෂ්ටයි! අපට උදෑසන නවයට මහජන පුස්තකාලයේදී හමුවිය හැකියි."
+    ),
+    SpokenDialogueItem(
+      "dlg_15",
+      "Sports Meet Practice",
+      "School & Classroom",
+      "Coach",
+      "Are all the athletes warmed up for the relay race?",
+      "රිලේ ධාවන තරගය සඳහා සියලුම මලල ක්‍රීඩකයින් ඇඟ උණුසුම් කරගත්තාද?",
+      "Captain",
+      "Yes coach, the relay baton handover practice went smoothly.",
+      "ඔව් පුහුණුකරුතුමනි, යෂ්ටිය හුවමාරු කිරීමේ පුහුණුව ඉතා සාර්ථකව සිදු විය."
+    ),
+    SpokenDialogueItem(
+      "dlg_16",
+      "Asking Teacher for Advice on Essays",
+      "School & Classroom",
+      "Chathura",
+      "Madam, how can I make my English essays more descriptive?",
+      "මැඩම්, මගේ ඉංග්‍රීසි රචනා වඩාත් විස්තරාත්මක කරගන්නේ කෙසේද?",
+      "Teacher",
+      "Use colorful adjectives, sensory details, and vary your sentence structures.",
+      "වර්ණවත් නාමවිශේෂණ, පංචේන්ද්‍රිය විස්තර සහ විවිධ වාක්‍ය රටා භාවිත කරන්න."
+    ),
+    SpokenDialogueItem(
+      "dlg_17",
+      "School Bus Delay",
+      "School & Classroom",
+      "Prabath",
+      "Why was our school bus fifteen minutes late today?",
+      "අද අපේ පාසල් බස් රථය විනාඩි පහළොවක් ප්‍රමාද වූයේ ඇයි?",
+      "Driver",
+      "There was heavy traffic near the railway crossing due to a breakdown.",
+      "වාහනයක් කාර්මික දෝෂයකට ලක්වීම නිසා දුම්රිය හරස් මාර්ගය අසල දැඩි තදබදයක් තිබුණා."
+    ),
+    SpokenDialogueItem(
+      "dlg_18",
+      "Encouraging a Classmate",
+      "School & Classroom",
+      "Thilina",
+      "I am really worried about tomorrow's English dictation test.",
+      "හෙට තියෙන ඉංග්‍රීසි ඩික්ටේෂන් පරීක්ෂණය ගැන මට ලොකු බයක් තියෙනවා.",
+      "Shehan",
+      "Don't worry, my friend. You practiced all the words yesterday, so you will do great!",
+      "බයවෙන්න එපා යාළුවා. ඔයා ඊයේ හැම වචනයක්ම හොඳින් පුහුණු වුණා, ඔයාට හොඳට කරන්න පුළුවන්!"
+    ),
+    SpokenDialogueItem(
+      "dlg_19",
+      "Volunteering for School Cleaning Campaign",
+      "School & Classroom",
+      "Prefect",
+      "We need five volunteers to plant flower saplings near the main gate.",
+      "ප්‍රධාන ගේට්ටුව අසල මල් පැළ සිටුවීමට අපට ස්වේච්ඡා සාමාජිකයින් පස්දෙනෙකු අවශ්‍යයි.",
+      "Student",
+      "Please write my name down; I love gardening!",
+      "කරුණාකර මගේ නම ලියාගන්න; මම ගෙවතු වගාවට ගොඩක් කැමතියි!"
+    ),
+    SpokenDialogueItem(
+      "dlg_20",
+      "Returning a Borrowed Book",
+      "School & Classroom",
+      "Gayan",
+      "Thank you for letting me read your grammar book, it was immensely helpful.",
+      "ඔබේ ව්‍යාකරණ පොත කියවීමට ලබාදීම ගැන ස්තූතියි, එය මට අතිශයින් ප්‍රයෝජනවත් වුණා.",
+      "Nalaka",
+      "You are always welcome! Feel free to borrow another whenever you want.",
+      "සතුටුයි! ඔබට අවශ්‍ය ඕනෑම වේලාවක තවත් පොතක් ගැනීමට නිදහස තිබෙනවා."
+    ),
+
+    // 21 - 40: Travel, Transport & Directions
+    SpokenDialogueItem(
+      "dlg_21",
+      "Asking for the Bus to Galle",
+      "Travel & Transport",
+      "Passenger",
+      "Excuse me, does this bus go directly to Galle?",
+      "සමාවෙන්න, මෙම බස් රථය කෙළින්ම ගාල්ලට යනවාද?",
+      "Conductor",
+      "No, this is an ordinary bus to Kalutara. You should board bus route 02.",
+      "නැහැ, මෙය කළුතර දක්වා යන සාමාන්‍ය බස් රථයකි. ඔබ මාර්ග අංක 02 බස් රථයට නැගිය යුතුය."
+    ),
+    SpokenDialogueItem(
+      "dlg_22",
+      "Purchasing a Train Ticket",
+      "Travel & Transport",
+      "Traveler",
+      "One second-class ticket to Kandy, please.",
+      "කරුණාකර මහනුවරට දෙවන පන්තියේ ප්‍රවේශ පත්‍රයක් දෙන්න.",
+      "Ticket Clerk",
+      "That will be five hundred rupees. Train arrives at platform three in ten minutes.",
+      "රුපියල් පන්සියයක් වෙනවා. මිනිත්තු දහයකින් දුම්රිය තුන්වන වේදිකාවට ළඟා වේ."
+    ),
+    SpokenDialogueItem(
+      "dlg_23",
+      "Asking Directions to the Hospital",
+      "Travel & Transport",
+      "Tourist",
+      "Could you tell me how far the General Hospital is from here?",
+      "මෙහි සිට මහ රෝහලට කොපමණ දුරක් තිබේදැයි ඔබට මට පැවසිය හැකිද?",
+      "Local Resident",
+      "It is about one kilometer ahead. Walk past the clock tower and turn right.",
+      "එය කිලෝමීටරයක් පමණ ඉදිරියෙන් ඇත. ඔරලෝසු කණුව පසුකර දකුණට හැරෙන්න."
+    ),
+    SpokenDialogueItem(
+      "dlg_24",
+      "Hiring a Three-Wheeler (Tuk-Tuk)",
+      "Travel & Transport",
+      "Passenger",
+      "Are you free to go to the railway station, uncle?",
+      "දුම්රිය ස්ථානයට යන්න පුළුවන්ද මාමේ?",
+      "Driver",
+      "Yes, please hop in. The meter is running.",
+      "ඔව්, කරුණාකර නඟින්න. මීටරය ක්‍රියාත්මකයි."
+    ),
+    SpokenDialogueItem(
+      "dlg_25",
+      "Inquiring About Train Delays",
+      "Travel & Transport",
+      "Commuter",
+      "Why hasn't the coastal line train arrived yet?",
+      "මුහුදුබඩ මාර්ගයේ දුම්රිය තවමත් නොපැමිණියේ ඇයි?",
+      "Station Master",
+      "There is a fifteen-minute signal delay near Moratuwa. It will arrive shortly.",
+      "මොරටුව අසල සංඥා දෝෂයක් නිසා මිනිත්තු පහළොවක ප්‍රමාදයක් ඇත. එය මඳ වේලාවකින් පැමිණේ."
+    ),
+    SpokenDialogueItem(
+      "dlg_26",
+      "Asking for a Window Seat",
+      "Travel & Transport",
+      "Passenger",
+      "Excuse me, would you mind if I took the window seat?",
+      "සමාවෙන්න, මම ජනේලය අසල ආසනයේ වාඩි වුණාට ඔබට කමක් නැද්ද?",
+      "Co-passenger",
+      "Not at all, please go ahead. I enjoy the aisle seat anyway.",
+      "කොහෙත්ම නැහැ, කරුණාකර වාඩිවන්න. මම කොරිඩෝව පැත්තේ ආසනයට කැමතියි."
+    ),
+    SpokenDialogueItem(
+      "dlg_27",
+      "Navigating an Unknown Town",
+      "Travel & Transport",
+      "Stranger",
+      "Pardon me, is there a commercial bank ATM nearby?",
+      "සමාවෙන්න, මේ කිට්ටුව කොමර්ෂල් බැංකු ATM යන්ත්‍රයක් තිබෙනවාද?",
+      "Pedestrian",
+      "Yes, cross the road safely and you will find one right next to the pharmacy.",
+      "ඔව්, පාරෙන් එගොඩ වන්න, ඔසුසල අසලම ඔබට එකක් සොයාගත හැකිය."
+    ),
+    SpokenDialogueItem(
+      "dlg_28",
+      "Confirming Highway Bus Fare",
+      "Travel & Transport",
+      "Passenger",
+      "How much is the expressway bus ticket from Makumbura to Galle?",
+      "මාකුඹුර සිට ගාල්ල දක්වා අධිවේගී මාර්ග බස් ගාස්තුව කීයද?",
+      "Conductor",
+      "It is one thousand one hundred rupees per person.",
+      "එක් අයෙකුට රුපියල් එක්දහස් එකසියයක් වේ."
+    ),
+    SpokenDialogueItem(
+      "dlg_29",
+      "Visiting Sigiriya Rock Fortress",
+      "Travel & Transport",
+      "Visitor",
+      "How long does it take to climb to the summit of Sigiriya?",
+      "සීගිරිය මුදුනටම නැගීමට කොපමණ වේලාවක් ගතවේද?",
+      "Tour Guide",
+      "It usually takes about an hour and a half at a steady, leisurely pace.",
+      "සාමාන්‍යයෙන් විවේකීව නැගීමට පැය එකහමාරක් පමණ ගතවේ."
+    ),
+    SpokenDialogueItem(
+      "dlg_30",
+      "Asking for Nearest Petrol Station",
+      "Travel & Transport",
+      "Motorist",
+      "Excuse me, where is the nearest filling station?",
+      "සමාවෙන්න, ළඟම ඇති ඉන්ධන පිරවුම්හල කොහේද?",
+      "Shopkeeper",
+      "Drive two hundred meters straight ahead, it is on your left-hand side.",
+      "කෙළින්ම මීටර් දෙසීයක් ඉදිරියට ධාවනය කරන්න, එය ඔබගේ වම් අත පැත්තේ ඇත."
+    ),
+    SpokenDialogueItem(
+      "dlg_31",
+      "Inquiring About Airport Bus",
+      "Travel & Transport",
+      "Traveler",
+      "Is there an airport bus operating from Colombo Central Bus Stand?",
+      "කොළඹ මධ්‍යම බස් නැවතුම්පොළේ සිට ගුවන් තොටුපළ බස් රථයක් ධාවනය වෙනවාද?",
+      "Officer",
+      "Yes, the highway luxury bus leaves every thirty minutes from bay five.",
+      "ඔව්, පස්වන නැවතුම් වේදිකාවෙන් සෑම විනාඩි තිහකට වරක්ම අධිවේගී බස් රථයක් පිටත් වේ."
+    ),
+    SpokenDialogueItem(
+      "dlg_32",
+      "Boarding an Intercity Train",
+      "Travel & Transport",
+      "Passenger",
+      "Is this the express train heading towards Jaffna?",
+      "යාපනය බලා ධාවනය වන සීඝ්‍රගාමී දුම්රිය මෙයද?",
+      "Railway Guard",
+      "Yes, please show your reserved ticket and step on board.",
+      "ඔව්, කරුණාකර ඔබගේ වෙන්කළ ප්‍රවේශ පත්‍රය පෙන්වා දුම්රියට ගොඩවන්න."
+    ),
+    SpokenDialogueItem(
+      "dlg_33",
+      "Booking a Hotel Room",
+      "Travel & Transport",
+      "Guest",
+      "Do you have a double room with mountain view available for tonight?",
+      "කඳු පන්තිය පෙනෙන දෙදෙනෙකුට සිටිය හැකි කාමරයක් අද රාත්‍රියට තිබේද?",
+      "Receptionist",
+      "Yes sir, we have one deluxe room available on the second floor.",
+      "ඔව් මහත්මයා, දෙවන මහලේ එවැනි ඩිලක්ස් කාමරයක් අප සතුව ඇත."
+    ),
+    SpokenDialogueItem(
+      "dlg_34",
+      "Asking About Luggage Weight",
+      "Travel & Transport",
+      "Passenger",
+      "What is the maximum baggage weight allowed on this domestic flight?",
+      "මෙම දේශීය ගුවන් ගමනේදී රැගෙන යා හැකි උපරිම ගමන් මලු බර කොපමණද?",
+      "Airline Staff",
+      "You are permitted up to fifteen kilograms for checked baggage.",
+      "භාරදෙන ගමන් මලු සඳහා කිලෝග්‍රෑම් පහළොවක් දක්වා අවසර ලැබේ."
+    ),
+    SpokenDialogueItem(
+      "dlg_35",
+      "Lost in the City Center",
+      "Travel & Transport",
+      "Pedestrian",
+      "Excuse me, I seem to be lost. Which way leads to Galle Face Green?",
+      "සමාවෙන්න, මට මඟ වැරදී ඇත. ගාලු මුවදොර පිටියට යන මාර්ගය කුමක්ද?",
+      "Police Officer",
+      "Walk down this avenue for five minutes; you will see the ocean right ahead.",
+      "මෙම මාවත දිගේ විනාඩි පහක් ඇවිදින්න; ඉදිරියෙන්ම ඔබට සාගරය පෙනෙනු ඇත."
+    ),
+    SpokenDialogueItem(
+      "dlg_36",
+      "Expressing Seasickness",
+      "Travel & Transport",
+      "Tourist",
+      "I am feeling a bit seasick on this whale watching boat.",
+      "මෙම තල්මසුන් නිරීක්ෂණ බෝට්ටුවේදී මට මඳක් කරකැවිල්ල වගේ දැනෙනවා.",
+      "Boat Crew",
+      "Look towards the horizon and take slow, deep breaths of fresh sea breeze.",
+      "ක්ෂිතිජය දෙස බලන්න, නැවුම් මුහුදු සුළඟින් ගැඹුරු හුස්මක් ගන්න."
+    ),
+    SpokenDialogueItem(
+      "dlg_37",
+      "Hiring a Bicycle in Polonnaruwa",
+      "Travel & Transport",
+      "Tourist",
+      "How much do you charge to rent a bicycle for the full day?",
+      "සම්පූර්ණ දවසකට බයිසිකලයක් කුලියට දීමට ඔබ අය කරන්නේ කීයද?",
+      "Shop Owner",
+      "It is eight hundred rupees per day, including a helmet and bicycle lock.",
+      "හිස්වැස්ම සහ අගුල ද ඇතුළුව දවසකට රුපියල් අටසියයක් වේ."
+    ),
+    SpokenDialogueItem(
+      "dlg_38",
+      "Asking About Weather Forecast",
+      "Travel & Transport",
+      "Hiker",
+      "Do you think it will rain during our trek up Adam's Peak?",
+      "ශ්‍රී පාදය තරණය කරන අතරතුර වැසි ඇදහැලෙතැයි ඔබ සිතනවාද?",
+      "Local Guide",
+      "The morning skies are clear, but always carry a raincoat just in case.",
+      "උදෑසන අහස පැහැදිලි වුවත්, ඕනෑම වේලාවක වැසි ඇතිවිය හැකි බැවින් වැහි කබායක් රැගෙන යන්න."
+    ),
+    SpokenDialogueItem(
+      "dlg_39",
+      "Crossing the Road Safely",
+      "Travel & Transport",
+      "Mother",
+      "Hold my hand tightly until the pedestrian crossing light turns green.",
+      "පදික මාරුවීමේ සංඥා එළිය කොළ පාට වන තුරු මගේ අත තදින් අල්ලා ගන්න.",
+      "Child",
+      "Okay mother, I see the vehicles have stopped now.",
+      "හොඳයි අම්මේ, දැන් වාහන නැවතිලා තියෙනවා මම දකිනවා."
+    ),
+    SpokenDialogueItem(
+      "dlg_40",
+      "Complimenting Scenic Scenery",
+      "Travel & Transport",
+      "Traveler",
+      "Look at those cascading waterfalls in Nuwara Eliya!",
+      "නුවරඑළියේ ඇදහැලෙන එම සුන්දර දියඇලි දෙස බලන්න!",
+      "Companion",
+      "Indeed, the lush tea estates look absolutely breathtaking in this misty weather.",
+      "සැබැවින්ම, මෙම මීදුම් සහිත කාලගුණයේදී සශ්‍රීක තේ වතු දර්ශනය අතිශයින් මනරම්ය."
+    ),
+
+    // 41 - 60: Shopping & Daily Errands
+    SpokenDialogueItem(
+      "dlg_41",
+      "Buying School Shoes",
+      "Shopping & Money",
+      "Customer",
+      "Do you have this black school shoe in size seven?",
+      "මෙම කළු පැහැති පාසල් සපත්තුව ප්‍රමාණ අංක හතෙන් තිබෙනවාද?",
+      "Sales Assistant",
+      "Yes, let me fetch a pair from the storeroom for you to try on.",
+      "ඔව්, ඔබට පැළඳ බැලීමට ගබඩා කාමරයෙන් යුගලයක් ගෙනැවිත් දෙන්නම්."
+    ),
+    SpokenDialogueItem(
+      "dlg_42",
+      "Inquiring About Vegetable Prices",
+      "Shopping & Money",
+      "Shopper",
+      "How much is a kilo of fresh red carrots today?",
+      "අද නැවුම් කැරට් කිලෝවක් කීයද?",
+      "Vendor",
+      "It is three hundred and sixty rupees per kilo, madam.",
+      "මැඩම්, කිලෝවක් රුපියල් තුන්සිය හැටක් වෙනවා."
+    ),
+    SpokenDialogueItem(
+      "dlg_43",
+      "Requesting a Store Discount",
+      "Shopping & Money",
+      "Customer",
+      "Could you offer a small discount if I purchase five novels?",
+      "මම නවකතා පහක් මිලදී ගතහොත් මට කුඩා වට්ටමක් ලබාදිය හැකිද?",
+      "Bookstore Owner",
+      "Certainly! I can give you a ten percent discount on the total bill.",
+      "අනිවාර්යයෙන්ම! සම්පූර්ණ බිල්පතට සියයට දහයක වට්ටමක් ලබාදිය හැකියි."
+    ),
+    SpokenDialogueItem(
+      "dlg_44",
+      "Paying with Card or Cash",
+      "Shopping & Money",
+      "Cashier",
+      "How would you prefer to pay today, cash or card?",
+      "අද ඔබ ගෙවීම සිදු කරන්නේ මුදලින්ද නැතහොත් කාඩ්පතින්ද?",
+      "Customer",
+      "I will pay using my debit card, please tap it here.",
+      "මම ඩෙබිට් කාඩ්පතින් ගෙවන්නම්, කරුණාකර මෙතැනින් ස්පර්ශ කරන්න."
+    ),
+    SpokenDialogueItem(
+      "dlg_45",
+      "Exchanging a Damaged Pen",
+      "Shopping & Money",
+      "Customer",
+      "Excuse me, this ballpoint pen does not write properly; can I exchange it?",
+      "සමාවෙන්න, මෙම බෝල්පොයින්ට් පෑන හරියට ලියවෙන්නේ නැහැ; එය මාරු කරගත හැකිද?",
+      "Shopkeeper",
+      "Of course. Please select another pen of the same price.",
+      "නිසැකවම. කරුණාකර එම මිලෙහිම ඇති වෙනත් පෑනක් තෝරාගන්න."
+    ),
+    SpokenDialogueItem(
+      "dlg_46",
+      "Buying Fresh Bread at Bakery",
+      "Shopping & Money",
+      "Customer",
+      "Good evening, is this loaf of roast paan still warm?",
+      "සුබ සන්ධ්‍යාවක්, මේ රෝස් පාන් ගෙඩිය තවමත් උණුසුම්ව තිබෙනවාද?",
+      "Baker",
+      "Yes, we just brought it out of the wood-fired oven ten minutes ago.",
+      "ඔව්, අපි මිනිත්තු දහයකට පෙරයි එය දර පෝරණුවෙන් එළියට ගත්තේ."
+    ),
+    SpokenDialogueItem(
+      "dlg_47",
+      "Selecting an Umbrella for Rainy Season",
+      "Shopping & Money",
+      "Customer",
+      "I need a sturdy three-fold umbrella that withstands windy rain.",
+      "සුළං සහිත වැස්සට ඔරොත්තු දෙන ශක්තිමත් නැමිය හැකි කුඩයක් මට අවශ්‍යයි.",
+      "Salesperson",
+      "This silver-coated windproof umbrella is our most durable model.",
+      "මෙම රිදී ආලේපිත සුළං ආරක්‍ෂිත කුඩය අපගේ වඩාත්ම කල්පවතින මාදිලියයි."
+    ),
+    SpokenDialogueItem(
+      "dlg_48",
+      "Asking for Cash Receipt",
+      "Shopping & Money",
+      "Customer",
+      "Could you please print a formal receipt for my office claim?",
+      "මගේ කාර්යාල ප්‍රතිපූරණය සඳහා කරුණාකර නිල රිසිට්පතක් මුද්‍රණය කර දිය හැකිද?",
+      "Cashier",
+      "Certainly, here is the stamped itemized receipt with tax details.",
+      "අනිවාර්යයෙන්ම, බදු විස්තර සහිත මුද්‍රා තැබූ රිසිට්පත මෙන්න."
+    ),
+    SpokenDialogueItem(
+      "dlg_49",
+      "Buying Fresh Coconut",
+      "Shopping & Money",
+      "Customer",
+      "Could you pick a fresh, mature coconut with plenty of water?",
+      "වතුර පිරි හොඳින් පැසුණු නැවුම් පොල් ගෙඩියක් තෝරා දිය හැකිද?",
+      "Vendor",
+      "Here is a heavy one with thick kernel, perfect for your curry.",
+      "මෙන්න මද ඝනකම් බර ගෙඩියක්, ඔබගේ ව්‍යංජනයට ඉතා කදිමයි."
+    ),
+    SpokenDialogueItem(
+      "dlg_50",
+      "Looking for Study Lamps",
+      "Shopping & Money",
+      "Customer",
+      "Do you sell rechargeable LED desk study lamps?",
+      "නැවත ආරෝපණය කළ හැකි (Rechargeable) LED මේස පාඩම් ලාම්පු ඔබ සතුව තිබේද?",
+      "Electrician",
+      "Yes, this model has three brightness levels and lasts six hours on battery.",
+      "ඔව්, මෙම මාදිලියේ දීප්ති මට්ටම් තුනක් ඇති අතර බැටරිය පැය හයක් පවතී."
+    ),
+    SpokenDialogueItem(
+      "dlg_51",
+      "Inquiring About Delivery Charges",
+      "Shopping & Money",
+      "Buyer",
+      "Is delivery free within the municipal limits of Kandy?",
+      "මහනුවර නගර සභා සීමාව තුළ භාණ්ඩ ගෙනැවිත් දීම නොමිලේ සපයනවාද?",
+      "Store Manager",
+      "Yes, orders exceeding five thousand rupees qualify for free doorstep delivery.",
+      "ඔව්, රුපියල් පන්දහස ඉක්මවන ඇණවුම් සඳහා නිවසටම නොමිලේ ගෙනැවිත් දෙනු ලැබේ."
+    ),
+    SpokenDialogueItem(
+      "dlg_52",
+      "Checking Expiry Date on Medicine",
+      "Shopping & Money",
+      "Customer",
+      "Could you double-check the expiry date on this vitamin syrup?",
+      "මෙම විටමින් පැණියේ කල් ඉකුත්වීමේ දිනය කරුණාකර නැවත පරීක්ෂා කර බැලිය හැකිද?",
+      "Pharmacist",
+      "It is valid until November 2027, so it is safe to use.",
+      "එය 2027 නොවැම්බර් දක්වා වලංගුයි, එබැවින් භාවිතය ආරක්ෂිතයි."
+    ),
+    SpokenDialogueItem(
+      "dlg_53",
+      "Buying Ceylon Spices",
+      "Shopping & Money",
+      "Tourist",
+      "Is this authentic Ceylon cinnamon or ordinary cassia bark?",
+      "මෙය සැබෑ ලංකා කුරුඳුද නැතහොත් සාමාන්‍ය කැසියා පොතුද?",
+      "Spice Merchant",
+      "This is genuine Ceylon alba cinnamon, world famous for its sweet aroma.",
+      "මෙය එහි මිහිරි සුවඳ සඳහා ලෝක ප්‍රකට සැබෑ සිලෝන් ඇල්බා කුරුඳුයි."
+    ),
+    SpokenDialogueItem(
+      "dlg_54",
+      "Returning Wrong Sized Shirt",
+      "Shopping & Money",
+      "Shopper",
+      "I bought this medium shirt yesterday, but I need an extra-large size.",
+      "මම ඊයේ මෙම මධ්‍යම (M) ප්‍රමාණයේ කමිසය ගත්තා, නමුත් මට අවශ්‍ය XL ප්‍රමාණයයි.",
+      "Cashier",
+      "No problem at all. As long as you have the tag and bill, we will swap it.",
+      "කිසිම ගැටලුවක් නැහැ. ටැගය සහ බිල්පත ඇති තාක් අපි එය මාරු කර දෙන්නම්."
+    ),
+    SpokenDialogueItem(
+      "dlg_55",
+      "Selecting Fruit at the Market",
+      "Shopping & Money",
+      "Customer",
+      "Are these golden papayas sweet and ripe for eating today?",
+      "මෙම පැපොල් ගෙඩි අදම කෑමට හැකි තරම් පැණි රස හා ඉදුණු ඒවාද?",
+      "Fruit Seller",
+      "Yes, they were harvested naturally ripe this morning from our home garden.",
+      "ඔව්, ඒවා අද උදෑසන අපගේ ගෙවත්තෙන් ස්වභාවිකව ඉදීමට සලස්වා කඩාගත් ඒවායි."
+    ),
+    SpokenDialogueItem(
+      "dlg_56",
+      "Buying Recharge Card",
+      "Shopping & Money",
+      "Customer",
+      "Could I get a five hundred rupee mobile reload for my phone?",
+      "මගේ දුරකථනයට රුපියල් පන්සියයක ජංගම රීලෝඩ් එකක් දාන්න පුළුවන්ද?",
+      "Merchant",
+      "Sure, please dictate your mobile number slowly.",
+      "අනිවාර්යයෙන්ම, කරුණාකර ඔබගේ දුරකථන අංකය සෙමින් කියන්න."
+    ),
+    SpokenDialogueItem(
+      "dlg_57",
+      "Asking for Eco-friendly Bag",
+      "Shopping & Money",
+      "Customer",
+      "I prefer cloth bags rather than single-use plastic polythene.",
+      "තනි භාවිත ප්ලාස්ටික් පොලිතින් වෙනුවට මම රෙදි බෑග් වලට වඩාත් කැමතියි.",
+      "Cashier",
+      "That is commendable! We encourage all shoppers to bring reusable bags.",
+      "එය ඉතා අගය කළ යුතුයි! නැවත භාවිත කළ හැකි බෑග් රැගෙන ඒමට අපි සැම දිරිගන්වමු."
+    ),
+    SpokenDialogueItem(
+      "dlg_58",
+      "Repairing a Wristwatch",
+      "Shopping & Money",
+      "Customer",
+      "My watch stopped ticking yesterday; could you replace the battery?",
+      "මගේ අත් ඔරලෝසුව ඊයේ නැවතුණා; බැටරිය මාරු කර දිය හැකිද?",
+      "Watchmaker",
+      "Let me examine it. Yes, a fresh battery replacement will take only five minutes.",
+      "මට එය පරීක්ෂා කිරීමට දෙන්න. ඔව්, අලුත් බැටරියක් දැමීමට විනාඩි පහක් පමණක් ගතවේ."
+    ),
+    SpokenDialogueItem(
+      "dlg_59",
+      "Bargaining on Handicraft Souvenirs",
+      "Shopping & Money",
+      "Buyer",
+      "Would you accept one thousand rupees for this carved wooden elephant?",
+      "මෙම ලීයෙන් කැටයම් කළ අලි රූපය සඳහා රුපියල් දහසක් බාරගන්න පුළුවන්ද?",
+      "Artisan",
+      "Since you appreciate handmade local craft, I can agree to that price.",
+      "ඔබ දේශීය අත්කම් කලාව අගය කරන බැවින් මම එම මිලට එකඟ වෙමි."
+    ),
+    SpokenDialogueItem(
+      "dlg_60",
+      "Leaving a Good Feedback",
+      "Shopping & Money",
+      "Customer",
+      "Thank you for your courteous assistance; you made our shopping seamless!",
+      "ඔබගේ කාරුණික සහයෝගයට ස්තූතියි; ඔබ අපගේ සාප්පු සවාරිය ඉතා පහසු කළා!",
+      "Shop Assistant",
+      "It was my absolute pleasure. Please visit our store again soon!",
+      "එය මගේ මහත් සතුටක්. කරුණාකර ළඟදීම නැවතත් අපගේ වෙළඳසැලට පැමිණෙන්න!"
+    ),
+
+    // 61 - 80: Health, Medical & Wellness
+    SpokenDialogueItem(
+      "dlg_61",
+      "Consulting the Family Doctor",
+      "Health & Medical",
+      "Doctor",
+      "Good morning, Kasun. What symptoms are troubling you today?",
+      "සුබ උදෑසනක් කසුන්. අද ඔබට තිබෙන රෝග ලක්ෂණ මොනවාද?",
+      "Patient",
+      "Doctor, I have a persistent cough and a headache since Wednesday.",
+      "දොස්තර මහත්මයා, බදාදා සිට මට නොනවතින කැස්සක් සහ හිසරදයක් තිබෙනවා."
+    ),
+    SpokenDialogueItem(
+      "dlg_62",
+      "Doctor Giving Medical Advice",
+      "Health & Medical",
+      "Doctor",
+      "Your chest sounds clear, but you have a mild viral infection. Take this syrup.",
+      "ඔබේ පපුව පැහැදිලියි, නමුත් සුළු වෛරස් ආසාදනයක් තිබෙනවා. මෙම පැණිය බොන්න.",
+      "Patient",
+      "Thank you doctor. How many times a day should I consume it?",
+      "ස්තූතියි දොස්තර මහත්මයා. දිනකට කී වතාවක් මම එය ගත යුතුද?"
+    ),
+    SpokenDialogueItem(
+      "dlg_63",
+      "At the Dental Clinic",
+      "Health & Medical",
+      "Dentist",
+      "Open wide, please. You have a small cavity on your lower molar.",
+      "කරුණාකර කට හොඳින් අරින්න. ඔබේ යටි හනුවේ දතක කුඩා කුහරයක් තිබෙනවා.",
+      "Patient",
+      "Will it be painful to have it cleaned and filled, doctor?",
+      "එය පිරිසිදු කර පිරවීමේදී වේදනාවක් දැනේද දොස්තර මහත්මයා?"
+    ),
+    SpokenDialogueItem(
+      "dlg_64",
+      "Getting Eyeglasses Checked",
+      "Health & Medical",
+      "Optometrist",
+      "Can you read the smallest letters on the bottom line of the eye chart?",
+      "ඇස් පරීක්ෂණ පුවරුවේ පහළම පේළියේ ඇති කුඩාම අකුරු ඔබට කියවිය හැකිද?",
+      "Student",
+      "They look a bit blurry, but the second row is distinctly readable.",
+      "ඒවා මඳක් බොඳව පෙනේ, නමුත් දෙවන පේළිය පැහැදිලිව කියවිය හැකිය."
+    ),
+    SpokenDialogueItem(
+      "dlg_65",
+      "Pharmacist Explaining Dosage",
+      "Health & Medical",
+      "Pharmacist",
+      "Take one tablet after breakfast and one tablet after dinner with water.",
+      "උදෑසන ආහාරයෙන් පසු එක් පෙත්තක් සහ රාත්‍රී ආහාරයෙන් පසු එක් පෙත්තක් වතුර සමඟ ගන්න.",
+      "Customer",
+      "Should I complete the entire course even if my fever subsides?",
+      "උණ බැස ගියද මම නියමිත සම්පූර්ණ දින ගණන බෙහෙත් ගත යුතුද?"
+    ),
+    SpokenDialogueItem(
+      "dlg_66",
+      "Dealing with Sports Sprain",
+      "Health & Medical",
+      "First Aider",
+      "Keep an ice pack compressed on the ankle for fifteen minutes to reduce swelling.",
+      "ඉදිමීම අඩු කිරීම සඳහා විනාඩි පහළොවක් වළලුකර මත අයිස් පැකට්ටුවක් තබා ගන්න.",
+      "Player",
+      "Thank you, the ice definitely eases the throbbing pain.",
+      "ස්තූතියි, අයිස් තැබීමෙන් දැඩි වේදනාව නිසැකවම සමනය වේ."
+    ),
+    SpokenDialogueItem(
+      "dlg_67",
+      "Inquiring About Dengue Prevention",
+      "Health & Medical",
+      "Health Officer",
+      "We must inspect all water containers and gutters to prevent mosquito breeding.",
+      "මදුරුවන් බෝවීම වැළැක්වීම සඳහා සියලුම ජල බඳුන් සහ කාණු පරීක්ෂා කළ යුතුය.",
+      "Resident",
+      "Our school eco-club conducts a weekly clean-up campaign every Friday.",
+      "අපගේ පාසල් පරිසර සමාජය සෑම සිකුරාදා දිනකම සතිපතා පිරිසිදු කිරීමේ වැඩසටහනක් පවත්වයි."
+    ),
+    SpokenDialogueItem(
+      "dlg_68",
+      "Discussing Exam Stress and Sleep",
+      "Health & Medical",
+      "Counselor",
+      "How many hours of restful sleep do you usually get before an exam?",
+      "විභාගයකට පෙර සාමාන්‍යයෙන් ඔබට පැය කීයක සුව නින්දක් ලැබෙනවාද?",
+      "Student",
+      "Sometimes only five hours because I try to cram everything late at night.",
+      "සමහර විට පැය පහක් පමණයි, මන්ද මම රෑ බෝවන තුරු සියල්ල කටපාඩම් කිරීමට උත්සාහ කරන නිසාය."
+    ),
+    SpokenDialogueItem(
+      "dlg_69",
+      "Advice on Balanced Nutrition",
+      "Health & Medical",
+      "Nutritionist",
+      "Incorporate green vegetables, pulses, and fresh fruits into your daily plate.",
+      "ඔබේ දෛනික ආහාර වේලට පලා වර්ග, ධාන්‍ය වර්ග සහ නැවුම් පලතුරු ඇතුළත් කරන්න.",
+      "Mother",
+      "I will ensure my children eat fresh homegrown gotukola every week.",
+      "මගේ දරුවන් සෑම සතියකම නැවුම් ගෙවතු ගොටුකොළ ආහාරයට ගන්නා බවට මම වගබලා ගන්නම්."
+    ),
+    SpokenDialogueItem(
+      "dlg_70",
+      "Visiting a Sick Friend in Hospital",
+      "Health & Medical",
+      "Visitor",
+      "How are you feeling today, Ruwan? We all missed you in class.",
+      "අද ඔබට කොහොමද රුවන්? පන්තියේ අපි හැමෝටම ඔයාව මතක් වුණා.",
+      "Friend",
+      "I am recovering nicely. The doctor says I can go home this Saturday.",
+      "මම හොඳින් සුවය ලබමින් සිටිනවා. මේ සෙනසුරාදා ගෙදර යන්න පුළුවන් කියලා දොස්තර කිව්වා."
+    ),
+    SpokenDialogueItem(
+      "dlg_71",
+      "Taking Blood Pressure Reading",
+      "Health & Medical",
+      "Nurse",
+      "Please relax your arm and rest quietly while the cuff inflates.",
+      "කෆ් එක පිම්බෙන අතරතුර කරුණාකර අත සැහැල්ලුවෙන් තබා නිශ්ශබ්දව සිටින්න.",
+      "Patient",
+      "Is my blood pressure reading normal today, sister?",
+      "අද මගේ රුධිර පීඩනය සාමාන්‍ය මට්ටමේ තිබෙනවාද මිස්?"
+    ),
+    SpokenDialogueItem(
+      "dlg_72",
+      "Asking About Food Allergies",
+      "Health & Medical",
+      "Doctor",
+      "Did you develop any itching or red rashes after having seafood?",
+      "මුහුදු ආහාර ගැනීමෙන් පසු ඔබට කිසියම් කැසීමක් හෝ රතු පැහැති පලු මතුවීද?",
+      "Patient",
+      "Yes, my skin began itching immediately after eating prawns.",
+      "ඔව්, ඉස්සන් ආහාරයට ගත් වහාම මගේ සම කැසීමට පටන් ගත්තා."
+    ),
+    SpokenDialogueItem(
+      "dlg_73",
+      "Drinking Adequate Water",
+      "Health & Medical",
+      "Physical Trainer",
+      "Dehydration causes fatigue and cramps during midday heat.",
+      "දහවල් දැඩි අව්වේ විජලනය වීම නිසා අධික තෙහෙට්ටුව සහ කෙණ්ඩ පෙරළීම් ඇති වේ.",
+      "Athlete",
+      "I will make sure to drink at least two liters of water daily.",
+      "මම දිනපතා අවම වශයෙන් වතුර ලීටර් දෙකක්වත් පානය කිරීමට වගබලා ගන්නම්."
+    ),
+    SpokenDialogueItem(
+      "dlg_74",
+      "Taking Medicine with Warm Water",
+      "Health & Medical",
+      "Grandmother",
+      "Did you take your herbal coriander drink for your cold, child?",
+      "ඔබේ සෙම්ප්‍රතිශ්‍යාවට කොත්තමල්ලි පානය බිව්වාද දරුවෝ?",
+      "Grandson",
+      "Yes granny, it relieved my throat irritation wonderfully.",
+      "ඔව් ආච්චි, එයින් මගේ උගුරේ අපහසුව පුදුමාකාර ලෙස සමනය වුණා."
+    ),
+    SpokenDialogueItem(
+      "dlg_75",
+      "Requesting a Doctor Appointment",
+      "Health & Medical",
+      "Caller",
+      "I would like to channel Dr. Wickramasinghe for Thursday evening.",
+      "බ්‍රහස්පතින්දා සවස සඳහා වෛද්‍ය වික්‍රමසිංහ මහතා හමුවීමට වේලාවක් වෙන් කරවා ගැනීමට කැමතියි.",
+      "Hospital Reception",
+      "Your appointment number is twelve, please arrive by five-thirty.",
+      "ඔබගේ අංකය දොළහයි, කරුණාකර සවස පහයි තිහ වන විට පැමිණෙන්න."
+    ),
+    SpokenDialogueItem(
+      "dlg_76",
+      "Checking Temperature with Thermometer",
+      "Health & Medical",
+      "Mother",
+      "Keep the thermometer under your tongue for sixty seconds.",
+      "තත්පර හැටක් උෂ්ණත්වමානය ඔබේ දිව යට තබාගෙන සිටින්න.",
+      "Child",
+      "Does it show that my temperature has dropped to normal?",
+      "මගේ උණ සාමාන්‍ය අගයට බැස ඇති බව එය පෙන්වනවාද?"
+    ),
+    SpokenDialogueItem(
+      "dlg_77",
+      "Applying Antiseptic to a Scrape",
+      "Health & Medical",
+      "Teacher",
+      "Wash the knee scrape with clean running water first, then apply antiseptic.",
+      "මුලින්ම දණහිසේ සීරීම පිරිසිදු ගලායන ජලයෙන් සෝදා විෂබීජ නාශකය ගල්වන්න.",
+      "Student",
+      "Thank you teacher, it stung slightly at first, but now it feels clean.",
+      "ස්තූතියි ගුරුතුමිය, මුලින් මඳක් දැවිල්ල ආවත් දැන් පිරිසිදු බව දැනේ."
+    ),
+    SpokenDialogueItem(
+      "dlg_78",
+      "Importance of Morning Sunlight",
+      "Health & Medical",
+      "Science Teacher",
+      "Early morning sunlight helps our bodies synthesize essential Vitamin D.",
+      "උදෑසන හිරු එළිය අපගේ සිරුරට අත්‍යවශ්‍ය විටමින් D නිපදවීමට උපකාරී වේ.",
+      "Student",
+      "That is why our morning physical assembly is so beneficial!",
+      "අපගේ උදෑසන ශාරීරික ව්‍යායාම රැස්වීම මෙතරම් ප්‍රයෝජනවත් වන්නේ එබැවිනි!"
+    ),
+    SpokenDialogueItem(
+      "dlg_79",
+      "Preventing Eye Strain from Mobiles",
+      "Health & Medical",
+      "Father",
+      "Put the mobile phone down and take a walk in the garden.",
+      "ජංගම දුරකථනය පසෙක තබා ගෙවත්තේ ඇවිදින්න යන්න.",
+      "Daughter",
+      "You are right dad, my eyes were feeling quite fatigued.",
+      "තාත්තා කිව්ව දේ හරි, මගේ ඇස්වලට ලොකු තෙහෙට්ටුවක් දැනෙමින් තිබුණා."
+    ),
+    SpokenDialogueItem(
+      "dlg_80",
+      "Wishing Speedy Recovery",
+      "Health & Medical",
+      "Friend",
+      "Get plenty of sleep and rest; we look forward to seeing you back healthy soon!",
+      "හොඳින් නිදාගෙන විවේක ගන්න; ඔබ නිරෝගීව ආපසු එනතුරු අපි බලාපොරොත්තු වෙනවා!",
+      "Patient",
+      "Thank you for your kind wishes and thoughtful flowers!",
+      "ඔබගේ කාරුණික ප්‍රාර්ථනා සහ මල් කළඹට බොහොම ස්තූතියි!"
+    ),
+
+    // 81 - 100: Interviews, Ambitions & Technology
+    SpokenDialogueItem(
+      "dlg_81",
+      "School Prefect Interview",
+      "Interview & Ambition",
+      "Interviewer",
+      "Why do you believe you would make an exemplary school prefect?",
+      "ඔබ ආදර්ශමත් පාසල් ශිෂ්‍ය නායකයෙකු වනු ඇතැයි ඔබ විශ්වාස කරන්නේ ඇයි?",
+      "Candidate",
+      "Because I lead by personal example, practice discipline, and listen patiently.",
+      "මන්ද මම ආදර්ශයෙන් පෙරමුණ ගන්නා නිසාත්, විනය සුරකින නිසාත්, ඉවසීමෙන් සවන්දෙන නිසාත්ය."
+    ),
+    SpokenDialogueItem(
+      "dlg_82",
+      "Discussing Future Ambitions",
+      "Interview & Ambition",
+      "Teacher",
+      "What career stream do you plan to pursue after your O/L examination?",
+      "සාමාන්‍ය පෙළ විභාගයෙන් පසු කුමන විෂය ධාරාව හැදෑරීමට ඔබ සැලසුම් කරන්නේද?",
+      "Student",
+      "I wish to study physical sciences with the ambition of entering university.",
+      "විශ්වවිද්‍යාලයට ඇතුළත් වීමේ බලාපොරොත්තුවෙන් භෞතික විද්‍යා (ගණිත) අංශය හැදෑරීමට මම කැමැත්තෙමි."
+    ),
+    SpokenDialogueItem(
+      "dlg_83",
+      "Job Interview Greeting",
+      "Interview & Ambition",
+      "Interviewer",
+      "Good morning, please have a seat. Tell me briefly about yourself.",
+      "සුබ උදෑසනක්, කරුණාකර අසුන් ගන්න. ඔබ ගැන කෙටියෙන් මට පවසන්න.",
+      "Applicant",
+      "Thank you, sir. I have a strong background in software development and English communication.",
+      "ස්තූතියි සර්. මෘදුකාංග සංවර්ධනය සහ ඉංග්‍රීසි සන්නිවේදනය පිළිබඳව මට මනා පසුබිමක් ඇත."
+    ),
+    SpokenDialogueItem(
+      "dlg_84",
+      "Discussing Problem-Solving Skills",
+      "Interview & Ambition",
+      "Interviewer",
+      "How do you usually handle unexpected challenges or disagreements in a team?",
+      "කණ්ඩායමක අනපේක්ෂිත අභියෝග හෝ මතභේද ඇති වූ විට ඔබ සාමාන්‍යයෙන් කටයුතු කරන්නේ කෙසේද?",
+      "Candidate",
+      "I prioritize open communication, analyze the root cause, and find a collaborative compromise.",
+      "මම විවෘත සන්නිවේදනයට මුල්තැන දෙමින්, මූලික හේතුව විශ්ලේෂණය කර, සාමූහික එකඟතාවයක් සොයා ගනිමි."
+    ),
+    SpokenDialogueItem(
+      "dlg_85",
+      "Asking About IT & Coding Skills",
+      "Interview & Ambition",
+      "Interviewer",
+      "Which programming languages and platforms are you most comfortable utilizing?",
+      "ඔබ වඩාත්ම පහසුවෙන් භාවිතා කරන ක්‍රමලේඛන භාෂා සහ වේදිකා මොනවාද?",
+      "Candidate",
+      "I specialize in Kotlin, Jetpack Compose for Android, and Python for data analysis.",
+      "මම Android සඳහා Kotlin, Jetpack Compose සහ දත්ත විශ්ලේෂණය සඳහා Python විශේෂයෙන් හදාරා ඇත්තෙමි."
+    ),
+    SpokenDialogueItem(
+      "dlg_86",
+      "Inquiring About English Proficiency",
+      "Interview & Ambition",
+      "Interviewer",
+      "How confident are you when communicating verbally with international clients?",
+      "ජාත්‍යන්තර ගනුදෙනුකරුවන් සමඟ වාචිකව සන්නිවේදනය කිරීමේදී ඔබට කෙතරම් විශ්වාසයක් තිබේද?",
+      "Candidate",
+      "I communicate clearly and articulately, adapting my tone politely to any situation.",
+      "මම ඉතා පැහැදිලිව හා චතුර ලෙස සන්නිවේදනය කරන අතර, ඕනෑම අවස්ථාවකට සුදුසු පරිදි කාරුණිකව කතා කරමි."
+    ),
+    SpokenDialogueItem(
+      "dlg_87",
+      "Discussing Artificial Intelligence in Education",
+      "Interview & Ambition",
+      "Kasun",
+      "Do you think AI apps will replace traditional classroom teachers in future?",
+      "අනාගතයේදී AI යෙදුම් මඟින් සාම්ප්‍රදායික පන්තිකාමර ගුරුවරුන්ව ප්‍රතිස්ථාපනය කරනු ඇතැයි ඔබ සිතනවාද?",
+      "Senura",
+      "No, AI is a powerful assistant, but the human empathy of a teacher is irreplaceable.",
+      "නැහැ, AI යනු ප්‍රබල උපකාරකයෙකි, නමුත් ගුරුවරයෙකුගේ මානුෂීය සංවේදනය වෙනුවට කිසිවක් ආදේශ කළ නොහැක."
+    ),
+    SpokenDialogueItem(
+      "dlg_88",
+      "Handling constructive criticism",
+      "Interview & Ambition",
+      "Supervisor",
+      "Your project proposal is solid, but the conclusion requires further evidence.",
+      "ඔබේ ව්‍යාපෘති යෝජනාව හොඳයි, නමුත් නිගමනය සඳහා තවත් සාක්ෂි අවශ්‍යයි.",
+      "Intern",
+      "Thank you for the insightful feedback; I will enrich the data analysis immediately.",
+      "ගැඹුරු ප්‍රතිචාරයට ස්තූතියි; මම වහාම දත්ත විශ්ලේෂණය තවත් පොහොසත් කරන්නම්."
+    ),
+    SpokenDialogueItem(
+      "dlg_89",
+      "Setting Academic Goals",
+      "Interview & Ambition",
+      "Mentor",
+      "What concrete steps are you taking to score nine A's at the O/L exam?",
+      "සාමාන්‍ය පෙළ විභාගයෙන් A නවයක් ලබා ගැනීමට ඔබ ගන්නා නිශ්චිත පියවර මොනවාද?",
+      "Student",
+      "I follow a strict revision timetable, solve ten years of past papers, and practice spoken English.",
+      "මම නිශ්චිත කාලසටහනක් අනුගමනය කරමින්, වසර දහයක පසුගිය ප්‍රශ්න පත්‍ර විසඳමින් සහ ස්පෝකන් ඉංග්‍රීසි පුහුණු වෙමි."
+    ),
+    SpokenDialogueItem(
+      "dlg_90",
+      "Applying for a University Scholarship",
+      "Interview & Ambition",
+      "Scholarship Board",
+      "How will this international scholarship impact your community in Sri Lanka?",
+      "මෙම ජාත්‍යන්තර ශිෂ්‍යත්වය ශ්‍රී ලංකාවේ ඔබේ ප්‍රජාවට කෙසේ බලපානු ඇත්ද?",
+      "Applicant",
+      "It will equip me with advanced renewable energy expertise to empower rural villages.",
+      "ග්‍රාමීය ගම්මාන බලගැන්වීම සඳහා උසස් පුනර්ජනනීය බලශක්ති දැනුමෙන් මාව සන්නද්ධ කරනු ඇත."
+    ),
+    SpokenDialogueItem(
+      "dlg_91",
+      "Discussing Environmental Conservation",
+      "Interview & Ambition",
+      "Activist",
+      "What is the most pressing ecological danger threatening our wetlands?",
+      "අපගේ තෙත්බිම් වලට තර්ජනයක් වන වඩාත්ම බරපතල පාරිසරික අනතුර කුමක්ද?",
+      "Student",
+      "Unregulated plastic dumping and urban encroachment disrupting delicate ecosystems.",
+      "අවිධිමත් ප්ලාස්ටික් බැහැර කිරීම සහ සියුම් පරිසර පද්ධති විනාශ කරන නාගරික ආක්‍රමණයයි."
+    ),
+    SpokenDialogueItem(
+      "dlg_92",
+      "Inquiring About Work Culture",
+      "Interview & Ambition",
+      "Candidate",
+      "Could you describe the collaborative learning culture within your company?",
+      "ඔබේ සමාගම තුළ ඇති සාමූහික ඉගෙනුම් සංස්කෘතිය විස්තර කළ හැකිද?",
+      "Manager",
+      "We foster innovation, encourage creative mentorship, and respect diversity.",
+      "අපි නවෝත්පාදනය පෝෂණය කරමු, නිර්මාණාත්මක මඟපෙන්වීම දිරිගන්වමු, සහ විවිධත්වයට ගරු කරමු."
+    ),
+    SpokenDialogueItem(
+      "dlg_93",
+      "Preparing for a Public Speech",
+      "Interview & Ambition",
+      "Coach",
+      "Remember to maintain pleasant eye contact and pause meaningfully between sentences.",
+      "ප්‍රසන්නව ඇස් දෙස බැලීම පවත්වා ගැනීමට සහ වාක්‍ය අතර අර්ථවත් ලෙස මඳක් නැවතීමට මතක තබා ගන්න.",
+      "Speaker",
+      "Yes, pausing allows the listeners to absorb the key message effectively.",
+      "ඔව්, එසේ මඳක් නැවතීම ශ්‍රාවකයන්ට ප්‍රධාන පණිවිඩය හොඳින් ග්‍රහණය කර ගැනීමට ඉඩ සලසයි."
+    ),
+    SpokenDialogueItem(
+      "dlg_94",
+      "Overcoming Stage Fright",
+      "Interview & Ambition",
+      "Performer",
+      "My palms feel sweaty before stepping onto the auditorium stage.",
+      "ශ්‍රවණාගාර වේදිකාවට පා තැබීමට පෙර මගේ අත්ලට දහඩිය දමයි.",
+      "Director",
+      "Channel that adrenaline into passionate expression; the audience is cheering for you!",
+      "එම උද්යෝගය ඔබේ උද්‍යෝගිමත් ප්‍රකාශනයට යොමු කරන්න; ප්‍රේක්ෂකාගාරය ඔබව දිරිගන්වයි!"
+    ),
+    SpokenDialogueItem(
+      "dlg_95",
+      "Discussing Cloud Computing and Mobile Apps",
+      "Interview & Ambition",
+      "Developer",
+      "Why did you choose Kotlin and Jetpack Compose for your mobile software project?",
+      "ඔබගේ ජංගම මෘදුකාංග ව්‍යාපෘතිය සඳහා Kotlin සහ Jetpack Compose තෝරාගත්තේ ඇයි?",
+      "Colleague",
+      "Because Compose offers modern declarative UI, rapid development, and smooth animations.",
+      "මක්නිසාද Compose මඟින් නවීන ප්‍රකාශනාත්මක UI, කඩිනම් සංවර්ධනය සහ සුමට ඇනිමේෂන් ලබාදෙන බැවිනි."
+    ),
+    SpokenDialogueItem(
+      "dlg_96",
+      "Negotiating a Project Deadline",
+      "Interview & Ambition",
+      "Student",
+      "Could our team have an extension until Friday to polish our final prototype?",
+      "අපගේ අවසන් ආකෘතිය තවදුරටත් ඔපමට්ටම් කිරීමට අපගේ කණ්ඩායමට සිකුරාදා දක්වා දිගුවක් ලබාගත හැකිද?",
+      "Professor",
+      "Granted, provided you demonstrate a fully functioning test build on Friday.",
+      "සිකුරාදා දින සම්පූර්ණයෙන්ම ක්‍රියාත්මක වන පරික්ෂණාත්මක ගොනුවක් පෙන්වන්නේ නම් අවසර දෙනු ලැබේ."
+    ),
+    SpokenDialogueItem(
+      "dlg_97",
+      "Seeking a Career Mentor",
+      "Interview & Ambition",
+      "Graduate",
+      "Would you be open to mentoring me as I begin my career in digital engineering?",
+      "මම ඩිජිටල් ඉංජිනේරු ක්ෂේත්‍රයේ මගේ වෘත්තිය ආරම්භ කරන විට මට මඟපෙන්වන්නෙකු වීමට ඔබ විවෘතද?",
+      "Senior Engineer",
+      "I would be honored. Let us schedule a monthly coffee session to review your progress.",
+      "මම එය ගෞරවයක් කොට සලකමි. ඔබගේ ප්‍රගතිය සමාලෝචනය කිරීමට මාසික කෝපි සාකච්ඡාවක් යොදා ගනිමු."
+    ),
+    SpokenDialogueItem(
+      "dlg_98",
+      "Receiving a Job Offer",
+      "Interview & Ambition",
+      "HR Manager",
+      "We are delighted to offer you the position of Junior Systems Analyst.",
+      "කනිෂ්ඨ පද්ධති විශ්ලේෂක තනතුර ඔබට පිරිනැමීමට ලැබීම ගැන අපි මහත් සතුටට පත් වෙමු.",
+      "Applicant",
+      "Thank you enthusiastically! I accept the offer and look forward to contributing my best.",
+      "ඉමහත් උද්‍යෝගයෙන් ස්තූතියි! මම මෙම පිරිනැමීම පිළිගන්නා අතර මගේ උපරිම දායකත්වය ලබාදීමට බලාපොරොත්තු වෙමි."
+    ),
+    SpokenDialogueItem(
+      "dlg_99",
+      "Celebrating Academic Milestone",
+      "Interview & Ambition",
+      "Father",
+      "Your hard work has paid off with outstanding distinction marks in all subjects!",
+      "ඔබගේ වෙහෙස මහන්සි වී වැඩ කිරීම සියලුම විෂයන්ගෙන් විශිෂ්ට සම්මාන සාමාර්ථ වලින් ප්‍රතිඵල ලබා දී ඇත!",
+      "Daughter",
+      "Thank you for always believing in me and supporting my dreams tirelessly.",
+      "සැමවිටම මා කෙරෙහි විශ්වාසය තබා වෙහෙස නොබලා මගේ සිහින වලට සහයෝගය දැක්වීම ගැන ස්තූතියි."
+    ),
+    SpokenDialogueItem(
+      "dlg_100",
+      "Final Words of Inspiration",
+      "Interview & Ambition",
+      "Principal",
+      "Go forth into the world with integrity, courage, and a thirst for lifelong learning.",
+      "අවංකභාවය, ධෛර්යය සහ ජීවිත කාලය පුරාම ඉගෙනීමේ පිපාසය සමඟින් ලෝකය ජය ගැනීමට පෙරට යන්න.",
+      "Valedictorian",
+      "We pledge to uphold our school values and serve society with honour and compassion!",
+      "අප පාසලේ වටිනාකම් සුරකිමින් ගෞරවයෙන් සහ දයාවෙන් සමාජයට සේවය කිරීමට අපි ප්‍රතිඥා දෙමු!"
+    )
+  )
+}

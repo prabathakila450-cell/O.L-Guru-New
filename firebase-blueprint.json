@@ -1,0 +1,29 @@
+{
+  "entities": {
+    "User": {
+      "properties": {
+        "userId": { "type": "string" },
+        "fullName": { "type": "string" },
+        "usernameOrPhone": { "type": "string" },
+        "isApproved": { "type": "boolean" },
+        "approvalTimestamp": { "type": "number", "optional": true },
+        "requestedGradePackage": { "type": "string" },
+        "boundDeviceId": { "type": "string", "optional": true },
+        "boundDeviceName": { "type": "string", "optional": true },
+        "role": { "type": "string" },
+        "createdAt": { "type": "timestamp" },
+        "updatedAt": { "type": "timestamp" }
+      }
+    },
+    "ApprovalRequest": {
+      "properties": {
+        "userId": { "type": "string" },
+        "fullName": { "type": "string" },
+        "phone": { "type": "string" },
+        "package": { "type": "string" },
+        "status": { "type": "string" },
+        "timestamp": { "type": "timestamp" }
+      }
+    }
+  }
+}

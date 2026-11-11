@@ -1,0 +1,87 @@
+name: Build and Release APK
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Source Code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Java 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '21'
+          cache: 'gradle'
+
+      - name: Ensure .env file
+        run: |
+          if [ ! -f ".env" ]; then
+            touch .env
+          fi
+
+      - name: Setup debug keystore
+        run: |
+          if [ -f "debug.keystore.base64" ]; then
+            base64 -d debug.keystore.base64 > debug.keystore
+          else
+            keytool -genkey -v -keystore debug.keystore -storepass android -alias androiddebugkey -keypass android -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=Android Debug,O=Android,C=US"
+          fi
+
+      - name: Grant Execute Permission to Gradle
+        run: chmod +x gradlew
+
+      - name: Build Debug APK with Gradle
+        run: |
+          ./gradlew assembleDebug --no-daemon --stacktrace
+
+      - name: Locate Generated APK
+        id: find_apk
+        run: |
+          APK_FILE=$(find app/build/outputs/apk/debug -type f -name "*.apk" | head -n 1)
+          if [ -z "$APK_FILE" ]; then
+            APK_FILE=$(find . -type f -name "*.apk" | head -n 1)
+          fi
+          echo "Found APK at: $APK_FILE"
+          echo "apk_path=$APK_FILE" >> $GITHUB_OUTPUT
+
+      - name: Upload APK as Workflow Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: EduLK-App-debug-apk
+          path: ${{ steps.find_apk.outputs.apk_path }}
+          retention-days: 30
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        continue-on-error: true
+        if: steps.find_apk.outputs.apk_path != ''
+        with:
+          tag_name: "v1.0.${{ github.run_number }}"
+          name: "Edu.LK App Release v1.0.${{ github.run_number }}"
+          body: |
+            ### 📱 Edu.LK Android App Official APK
+            - **Status**: Ready to install
+            - **Build Number**: ${{ github.run_number }}
+            
+            #### How to Install:
+            1. Download the `app-debug.apk` file below under **Assets**.
+            2. Transfer or open on your Android device.
+            3. Tap **Install** (Allow installation from unknown sources if prompted).
+          draft: false
+          prerelease: false
+          files: ${{ steps.find_apk.outputs.apk_path }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
