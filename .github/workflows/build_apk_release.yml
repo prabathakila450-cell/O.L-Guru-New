@@ -31,12 +31,17 @@ jobs:
       - name: Grant Execute Permission to Gradle
         run: chmod +x gradlew
 
-      # Using simple assembleDebug, removing extra swap/memory steps that often fail in constrained environments.
-      # Gradle handles memory itself based on runner specs.
-      - name: Build Debug APK with Gradle
-        run: ./gradlew :app:assembleDebug --stacktrace
+      - name: Setup debug keystore
+        run: |
+          keytool -genkey -v -keystore debug.keystore -storepass android -alias androiddebugkey -keypass android -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=Android Debug,O=Android,C=US"
+          mkdir -p ~/.android && cp debug.keystore ~/.android/debug.keystore || true
 
-      - name: Create GitHub Release with APK
+      - name: Build Debug APK with Gradle
+        env:
+          GRADLE_OPTS: "-Dorg.gradle.jvmargs=-Xmx3072m -XX:MaxMetaspaceSize=1024m -XX:+UseG1GC -Dfile.encoding=UTF-8"
+        run: ./gradlew :app:assembleDebug -x test -x lint -x check --no-daemon --max-workers=1 --stacktrace
+
+      - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         if: success()
         with:
