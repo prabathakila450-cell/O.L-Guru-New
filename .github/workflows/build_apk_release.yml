@@ -87,7 +87,13 @@ jobs:
           fi
           
           if [ -z "$APK_FILE" ] || [ ! -f "$APK_FILE" ]; then
-            echo "ERROR: No APK found anywhere in workspace!"
+            echo "WARNING: APK not found via find. Forcing gradle build explicit assembleDebug package..."
+            ./gradlew :app:packageDebug --stacktrace
+            APK_FILE=$(find . -name "app-debug.apk" | head -n 1)
+          fi
+          
+          if [ -z "$APK_FILE" ] || [ ! -f "$APK_FILE" ]; then
+            echo "ERROR: Still no APK found anywhere in workspace!"
             find . -maxdepth 5 -ls
             exit 1
           fi
