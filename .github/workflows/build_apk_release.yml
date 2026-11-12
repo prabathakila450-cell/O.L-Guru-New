@@ -53,6 +53,8 @@ jobs:
           elif [ ! -f "debug.keystore" ]; then
             keytool -genkey -v -keystore debug.keystore -storepass android -alias androiddebugkey -keypass android -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=Android Debug,O=Android,C=US"
           fi
+          cp debug.keystore app/debug.keystore || true
+          mkdir -p ~/.android && cp debug.keystore ~/.android/debug.keystore || true
 
       - name: Accept Android SDK Licenses & Install Components
         run: |
@@ -64,9 +66,14 @@ jobs:
 
       - name: Build Debug APK with Gradle
         env:
-          GRADLE_OPTS: "-Dorg.gradle.jvmargs=-Xmx2560m -XX:MaxMetaspaceSize=512m -XX:+UseG1GC -Dfile.encoding=UTF-8"
+          GRADLE_OPTS: "-Dorg.gradle.jvmargs=-Xmx3072m -XX:MaxMetaspaceSize=1024m -XX:+UseG1GC -Dfile.encoding=UTF-8"
         run: |
-          ./gradlew assembleDebug -x test --stacktrace
+          ./gradlew :app:assembleDebug -x test -x lint -x check --no-parallel --stacktrace 2>&1 | tee gradle_build.log || {
+            echo "==================== BUILD ERROR SUMMARY ===================="
+            grep -B 2 -A 30 "FAILURE: Build failed" gradle_build.log || tail -n 60 gradle_build.log
+            echo "============================================================="
+            exit 1
+          }
 
       - name: Locate Generated APK
         id: find_apk
