@@ -64,9 +64,9 @@ jobs:
 
       - name: Build Debug APK with Gradle
         env:
-          GRADLE_OPTS: "-Dorg.gradle.jvmargs=-Xmx3584m -XX:MaxMetaspaceSize=1024m -XX:+UseG1GC -Dfile.encoding=UTF-8"
+          GRADLE_OPTS: "-Dorg.gradle.jvmargs=-Xmx3072m -XX:MaxMetaspaceSize=512m -XX:+UseG1GC -Dfile.encoding=UTF-8"
         run: |
-          ./gradlew assembleDebug -x test --stacktrace
+          ./gradlew assembleDebug -x test --info --stacktrace
 
       - name: Locate Generated APK
         id: find_apk
