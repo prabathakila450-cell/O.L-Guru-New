@@ -14,14 +14,6 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Increase swap space
-        run: |
-          sudo swapoff -a
-          sudo fallocate -l 8G /swapfile
-          sudo chmod 600 /swapfile
-          sudo mkswap /swapfile
-          sudo swapon /swapfile
-
       - name: Checkout Source Code
         uses: actions/checkout@v4
         with:
@@ -39,14 +31,18 @@ jobs:
       - name: Grant Execute Permission to Gradle
         run: chmod +x gradlew
 
-      - name: Build Debug APK with Gradle
-        # Disable daemon and parallel to ensure stability in constrained environment
-        run: ./gradlew :app:assembleDebug -x test -x lint -x check --no-daemon --no-parallel --stacktrace
-        env:
-          GRADLE_OPTS: "-Dorg.gradle.jvmargs=-Xmx2048m -XX:MaxMetaspaceSize=512m -XX:+UseG1GC -Dfile.encoding=UTF-8"
+      - name: Build Debug APK with Gradle (Robust)
+        # 1. Use --no-daemon to avoid background process overhead.
+        # 2. Use --no-parallel to avoid worker contention on 2 vCPUs.
+        # 3. Use -Dorg.gradle.jvmargs to strictly limit heap memory.
+        # 4. Use --info to get maximum visibility if it fails again.
+        run: |
+          ./gradlew clean :app:assembleDebug -x test -x lint -x check --no-daemon --no-parallel --info --stacktrace \
+          -Dorg.gradle.jvmargs="-Xmx1536m -XX:MaxMetaspaceSize=512m -XX:+UseG1GC -Dfile.encoding=UTF-8"
 
       - name: Create GitHub Release with APK
         uses: softprops/action-gh-release@v2
+        if: success()
         with:
           tag_name: "v1.0.${{ github.run_number }}"
           name: "O/L Guru Android App Release v1.0.${{ github.run_number }}"
