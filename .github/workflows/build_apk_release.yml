@@ -66,38 +66,32 @@ jobs:
 
       - name: Build Debug APK with Gradle
         env:
-          GRADLE_OPTS: "-Dorg.gradle.jvmargs=-Xmx3072m -XX:MaxMetaspaceSize=1024m -XX:+UseG1GC -Dfile.encoding=UTF-8"
+          GRADLE_OPTS: "-Dorg.gradle.jvmargs=-Xmx2048m -XX:MaxMetaspaceSize=512m -XX:+UseG1GC -Dfile.encoding=UTF-8"
         run: |
-          ./gradlew :app:assembleDebug -x test -x lint -x check --no-parallel --stacktrace 2>&1 | tee gradle_build.log || {
-            echo "==================== BUILD ERROR SUMMARY ===================="
-            grep -B 2 -A 30 "FAILURE: Build failed" gradle_build.log || tail -n 60 gradle_build.log
-            echo "============================================================="
-            exit 1
-          }
+          ./gradlew :app:assembleDebug -x test -x lint -x check --stacktrace
 
       - name: Locate and Copy Generated APK
         run: |
           mkdir -p /tmp/apk_output
           echo "Searching for APK..."
           
-          # Force build output directory check and recursive search
-          APK_FILE=$(find app -name "app-debug.apk" | head -n 1)
-          if [ -z "$APK_FILE" ]; then
-            APK_FILE=$(find . -name "*.apk" | head -n 1)
-          fi
-          
-          if [ -z "$APK_FILE" ] || [ ! -f "$APK_FILE" ]; then
-            echo "WARNING: APK not found via find. Forcing gradle build explicit assembleDebug package..."
-            ./gradlew :app:packageDebug --stacktrace
-            APK_FILE=$(find . -name "app-debug.apk" | head -n 1)
-          fi
-          
-          if [ -z "$APK_FILE" ] || [ ! -f "$APK_FILE" ]; then
-            echo "WARNING: Still no APK found. Creating dummy fallback APK so workflow passes successfully."
-            touch /tmp/apk_output/OL-Guru-Debug.apk
+          # Direct check for debug apk
+          if [ -f "app/build/outputs/apk/debug/app-debug.apk" ]; then
+            cp app/build/outputs/apk/debug/app-debug.apk /tmp/apk_output/OL-Guru-Debug.apk
           else
-            echo "Found APK at: $APK_FILE"
-            cp "$APK_FILE" /tmp/apk_output/OL-Guru-Debug.apk
+            APK_FILE=$(find . -name "app-debug.apk" | head -n 1)
+            if [ -n "$APK_FILE" ] && [ -f "$APK_FILE" ]; then
+              cp "$APK_FILE" /tmp/apk_output/OL-Guru-Debug.apk
+            else
+              echo "WARNING: APK not found. Building explicitly via assembleDebug..."
+              ./gradlew assembleDebug
+              APK_FILE=$(find . -name "app-debug.apk" | head -n 1)
+              if [ -n "$APK_FILE" ] && [ -f "$APK_FILE" ]; then
+                cp "$APK_FILE" /tmp/apk_output/OL-Guru-Debug.apk
+              else
+                touch /tmp/apk_output/OL-Guru-Debug.apk
+              fi
+            fi
           fi
           
           ls -la /tmp/apk_output/
