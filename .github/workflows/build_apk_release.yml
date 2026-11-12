@@ -16,14 +16,14 @@ jobs:
     steps:
       - name: Increase swap space
         run: |
-          echo "Current memory and swap:"
+          echo "Free memory before swap allocation:"
           free -h
           sudo swapoff -a || true
-          sudo fallocate -l 10G /swapfile || sudo dd if=/dev/zero of=/swapfile bs=1M count=10240
+          sudo fallocate -l 8G /swapfile || sudo dd if=/dev/zero of=/swapfile bs=1M count=8192
           sudo chmod 600 /swapfile
           sudo mkswap /swapfile
           sudo swapon /swapfile
-          echo "Updated memory and swap:"
+          echo "Free memory after swap allocation:"
           free -h
 
       - name: Checkout Source Code
@@ -66,32 +66,32 @@ jobs:
 
       - name: Build Debug APK with Gradle
         env:
-          GRADLE_OPTS: "-Dorg.gradle.jvmargs=-Xmx2048m -XX:MaxMetaspaceSize=512m -XX:+UseG1GC -Dfile.encoding=UTF-8"
+          GRADLE_OPTS: "-Dorg.gradle.jvmargs=-Xmx4096m -XX:MaxMetaspaceSize=1024m -XX:+UseG1GC -Dfile.encoding=UTF-8"
         run: |
-          ./gradlew :app:assembleDebug -x test -x lint -x check --stacktrace
+          ./gradlew :app:assembleDebug -x test -x lint -x check --no-parallel --stacktrace
 
       - name: Locate and Copy Generated APK
         run: |
           mkdir -p /tmp/apk_output
-          echo "Searching for APK..."
+          echo "Locating built APK..."
           
-          # Direct check for debug apk
           if [ -f "app/build/outputs/apk/debug/app-debug.apk" ]; then
-            cp app/build/outputs/apk/debug/app-debug.apk /tmp/apk_output/OL-Guru-Debug.apk
+            APK_FILE="app/build/outputs/apk/debug/app-debug.apk"
           else
             APK_FILE=$(find . -name "app-debug.apk" | head -n 1)
-            if [ -n "$APK_FILE" ] && [ -f "$APK_FILE" ]; then
-              cp "$APK_FILE" /tmp/apk_output/OL-Guru-Debug.apk
-            else
-              echo "WARNING: APK not found. Building explicitly via assembleDebug..."
-              ./gradlew assembleDebug
-              APK_FILE=$(find . -name "app-debug.apk" | head -n 1)
-              if [ -n "$APK_FILE" ] && [ -f "$APK_FILE" ]; then
-                cp "$APK_FILE" /tmp/apk_output/OL-Guru-Debug.apk
-              else
-                touch /tmp/apk_output/OL-Guru-Debug.apk
-              fi
-            fi
+          fi
+          
+          if [ -z "$APK_FILE" ] || [ ! -f "$APK_FILE" ]; then
+            APK_FILE=$(find . -name "*.apk" | head -n 1)
+          fi
+          
+          if [ -n "$APK_FILE" ] && [ -f "$APK_FILE" ]; then
+            echo "Found APK at: $APK_FILE"
+            cp "$APK_FILE" /tmp/apk_output/OL-Guru-Debug.apk
+          else
+            echo "ERROR: APK file could not be found!"
+            find app/build -maxdepth 5 -ls || true
+            exit 1
           fi
           
           ls -la /tmp/apk_output/
