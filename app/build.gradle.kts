@@ -55,6 +55,7 @@ android {
       isShrinkResources = false
       proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
       signingConfig = signingConfigs.getByName("debugConfig")
+      buildConfigField("String", "API_URL", "\"https://dev-api.example.com\"")
     }
   }
   compileOptions {
