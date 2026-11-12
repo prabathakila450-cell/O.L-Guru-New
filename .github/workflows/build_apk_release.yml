@@ -24,7 +24,9 @@ jobs:
         with:
           distribution: 'temurin'
           java-version: '21'
-          cache: 'gradle'
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v4
 
       - name: Ensure .env file
         run: |
@@ -36,16 +38,24 @@ jobs:
         run: |
           if [ -f "debug.keystore.base64" ]; then
             base64 -d debug.keystore.base64 > debug.keystore
-          else
+          elif [ ! -f "debug.keystore" ]; then
             keytool -genkey -v -keystore debug.keystore -storepass android -alias androiddebugkey -keypass android -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=Android Debug,O=Android,C=US"
           fi
+
+      - name: Accept Android SDK Licenses & Install Components
+        run: |
+          yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --licenses || true
+          $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager "platforms;android-35" "build-tools;36.0.0" "platform-tools" || true
 
       - name: Grant Execute Permission to Gradle
         run: chmod +x gradlew
 
       - name: Build Debug APK with Gradle
+        env:
+          GRADLE_OPTS: "-Dorg.gradle.jvmargs=-Xmx4096m -XX:MaxMetaspaceSize=1024m -XX:+UseG1GC -Dfile.encoding=UTF-8"
+          JAVA_OPTS: "-Xmx4096m"
         run: |
-          ./gradlew assembleDebug --no-daemon --stacktrace
+          ./gradlew assembleDebug -x test --stacktrace
 
       - name: Locate Generated APK
         id: find_apk
@@ -60,7 +70,7 @@ jobs:
       - name: Upload APK as Workflow Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: EduLK-App-debug-apk
+          name: OL-Guru-App-debug-apk
           path: ${{ steps.find_apk.outputs.apk_path }}
           retention-days: 30
 
@@ -70,9 +80,9 @@ jobs:
         if: steps.find_apk.outputs.apk_path != ''
         with:
           tag_name: "v1.0.${{ github.run_number }}"
-          name: "Edu.LK App Release v1.0.${{ github.run_number }}"
+          name: "O/L Guru App Release v1.0.${{ github.run_number }}"
           body: |
-            ### 📱 Edu.LK Android App Official APK
+            ### 📱 O/L Guru Android App Official APK
             - **Status**: Ready to install
             - **Build Number**: ${{ github.run_number }}
             
