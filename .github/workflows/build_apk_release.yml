@@ -76,26 +76,26 @@ jobs:
           }
 
       - name: Locate Generated APK
-        id: find_apk
         run: |
+          mkdir -p /tmp/apk_output
           APK_FILE=$(find app/build/outputs/apk/debug -type f -name "*.apk" | head -n 1)
           if [ -z "$APK_FILE" ]; then
             APK_FILE=$(find . -type f -name "*.apk" | head -n 1)
           fi
           echo "Found APK at: $APK_FILE"
-          echo "apk_path=$APK_FILE" >> $GITHUB_OUTPUT
+          cp "$APK_FILE" /tmp/apk_output/app-debug.apk
+          ls -la /tmp/apk_output/
 
       - name: Upload APK as Workflow Artifact
         uses: actions/upload-artifact@v4
         with:
           name: OL-Guru-App-debug-apk
-          path: ${{ steps.find_apk.outputs.apk_path }}
+          path: /tmp/apk_output/app-debug.apk
           retention-days: 30
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         continue-on-error: true
-        if: steps.find_apk.outputs.apk_path != ''
         with:
           tag_name: "v1.0.${{ github.run_number }}"
           name: "O/L Guru App Release v1.0.${{ github.run_number }}"
@@ -110,6 +110,6 @@ jobs:
             3. Tap **Install** (Allow installation from unknown sources if prompted).
           draft: false
           prerelease: false
-          files: ${{ steps.find_apk.outputs.apk_path }}
+          files: /tmp/apk_output/app-debug.apk
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
