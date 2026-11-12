@@ -19,7 +19,7 @@ jobs:
           echo "Current memory and swap:"
           free -h
           sudo swapoff -a || true
-          sudo fallocate -l 8G /swapfile || sudo dd if=/dev/zero of=/swapfile bs=1M count=8192
+          sudo fallocate -l 10G /swapfile || sudo dd if=/dev/zero of=/swapfile bs=1M count=10240
           sudo chmod 600 /swapfile
           sudo mkswap /swapfile
           sudo swapon /swapfile
@@ -64,9 +64,9 @@ jobs:
 
       - name: Build Debug APK with Gradle
         env:
-          GRADLE_OPTS: "-Dorg.gradle.jvmargs=-Xmx3072m -XX:MaxMetaspaceSize=512m -XX:+UseG1GC -Dfile.encoding=UTF-8"
+          GRADLE_OPTS: "-Dorg.gradle.jvmargs=-Xmx2560m -XX:MaxMetaspaceSize=512m -XX:+UseG1GC -Dfile.encoding=UTF-8"
         run: |
-          ./gradlew assembleDebug -x test --info --stacktrace
+          ./gradlew assembleDebug -x test --stacktrace
 
       - name: Locate Generated APK
         id: find_apk
