@@ -31,14 +31,10 @@ jobs:
       - name: Grant Execute Permission to Gradle
         run: chmod +x gradlew
 
-      - name: Build Debug APK with Gradle (Robust)
-        # 1. Use --no-daemon to avoid background process overhead.
-        # 2. Use --no-parallel to avoid worker contention on 2 vCPUs.
-        # 3. Use -Dorg.gradle.jvmargs to strictly limit heap memory.
-        # 4. Use --info to get maximum visibility if it fails again.
-        run: |
-          ./gradlew clean :app:assembleDebug -x test -x lint -x check --no-daemon --no-parallel --info --stacktrace \
-          -Dorg.gradle.jvmargs="-Xmx1536m -XX:MaxMetaspaceSize=512m -XX:+UseG1GC -Dfile.encoding=UTF-8"
+      # Using simple assembleDebug, removing extra swap/memory steps that often fail in constrained environments.
+      # Gradle handles memory itself based on runner specs.
+      - name: Build Debug APK with Gradle
+        run: ./gradlew :app:assembleDebug --stacktrace
 
       - name: Create GitHub Release with APK
         uses: softprops/action-gh-release@v2
