@@ -40,10 +40,10 @@ jobs:
         run: chmod +x gradlew
 
       - name: Build Debug APK with Gradle
-        # Increased memory and removed --no-daemon for better performance with sufficient swap
-        run: ./gradlew :app:assembleDebug -x test -x lint -x check --stacktrace
+        # Disable daemon and parallel to ensure stability in constrained environment
+        run: ./gradlew :app:assembleDebug -x test -x lint -x check --no-daemon --no-parallel --stacktrace
         env:
-          GRADLE_OPTS: "-Dorg.gradle.jvmargs=-Xmx4096m -XX:MaxMetaspaceSize=1024m -XX:+UseG1GC -Dfile.encoding=UTF-8"
+          GRADLE_OPTS: "-Dorg.gradle.jvmargs=-Xmx2048m -XX:MaxMetaspaceSize=512m -XX:+UseG1GC -Dfile.encoding=UTF-8"
 
       - name: Create GitHub Release with APK
         uses: softprops/action-gh-release@v2
