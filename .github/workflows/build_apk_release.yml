@@ -75,12 +75,15 @@ jobs:
             exit 1
           }
 
-      - name: Locate Generated APK
+      - name: Locate and Copy Generated APK
         run: |
           mkdir -p /tmp/apk_output
-          APK_FILE=$(find app/build/outputs/apk/debug -type f -name "*.apk" | head -n 1)
+          echo "Searching for APK..."
+          APK_FILE=$(find . -name "*.apk" | head -n 1)
           if [ -z "$APK_FILE" ]; then
-            APK_FILE=$(find . -type f -name "*.apk" | head -n 1)
+            echo "ERROR: No APK found anywhere in workspace!"
+            find . -maxdepth 4 -ls
+            exit 1
           fi
           echo "Found APK at: $APK_FILE"
           cp "$APK_FILE" /tmp/apk_output/app-debug.apk
