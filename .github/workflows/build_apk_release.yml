@@ -80,7 +80,6 @@ jobs:
           mkdir -p /tmp/apk_output
           echo "Searching for APK..."
           
-          # Try standard path first
           if [ -f "app/build/outputs/apk/debug/app-debug.apk" ]; then
             APK_FILE="app/build/outputs/apk/debug/app-debug.apk"
           else
@@ -90,37 +89,33 @@ jobs:
           if [ -z "$APK_FILE" ] || [ ! -f "$APK_FILE" ]; then
             echo "ERROR: No APK found anywhere in workspace!"
             find . -maxdepth 4 -ls
-            exit 0
+            exit 1
           fi
           
           echo "Found APK at: $APK_FILE"
-          cp "$APK_FILE" /tmp/apk_output/app-debug.apk
+          cp "$APK_FILE" /tmp/apk_output/OL-Guru-Debug.apk
           ls -la /tmp/apk_output/
 
       - name: Upload APK as Workflow Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: OL-Guru-App-debug-apk
-          path: /tmp/apk_output/app-debug.apk
+          name: OL-Guru-Debug-APK
+          path: /tmp/apk_output/OL-Guru-Debug.apk
           retention-days: 30
 
-      - name: Create GitHub Release
+      - name: Create GitHub Release with Direct APK Asset
         uses: softprops/action-gh-release@v2
-        continue-on-error: true
         with:
           tag_name: "v1.0.${{ github.run_number }}"
-          name: "O/L Guru App Release v1.0.${{ github.run_number }}"
+          name: "O/L Guru Android App v1.0.${{ github.run_number }}"
           body: |
-            ### 📱 O/L Guru Android App Official APK
-            - **Status**: Ready to install
+            ### 📱 O/L Guru Android App Direct APK Download
+            - **Status**: Ready to install directly on your Android device!
             - **Build Number**: ${{ github.run_number }}
             
-            #### How to Install:
-            1. Download the `app-debug.apk` file below under **Assets**.
-            2. Transfer or open on your Android device.
-            3. Tap **Install** (Allow installation from unknown sources if prompted).
+            👇 **Click below on `OL-Guru-Debug.apk` under Assets to download and install immediately:**
           draft: false
           prerelease: false
-          files: /tmp/apk_output/app-debug.apk
+          files: /tmp/apk_output/OL-Guru-Debug.apk
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
