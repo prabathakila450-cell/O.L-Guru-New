@@ -14,6 +14,18 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
+      - name: Increase swap space
+        run: |
+          echo "Current memory and swap:"
+          free -h
+          sudo swapoff -a || true
+          sudo fallocate -l 8G /swapfile || sudo dd if=/dev/zero of=/swapfile bs=1M count=8192
+          sudo chmod 600 /swapfile
+          sudo mkswap /swapfile
+          sudo swapon /swapfile
+          echo "Updated memory and swap:"
+          free -h
+
       - name: Checkout Source Code
         uses: actions/checkout@v4
         with:
@@ -52,8 +64,7 @@ jobs:
 
       - name: Build Debug APK with Gradle
         env:
-          GRADLE_OPTS: "-Dorg.gradle.jvmargs=-Xmx4096m -XX:MaxMetaspaceSize=1024m -XX:+UseG1GC -Dfile.encoding=UTF-8"
-          JAVA_OPTS: "-Xmx4096m"
+          GRADLE_OPTS: "-Dorg.gradle.jvmargs=-Xmx3584m -XX:MaxMetaspaceSize=1024m -XX:+UseG1GC -Dfile.encoding=UTF-8"
         run: |
           ./gradlew assembleDebug -x test --stacktrace
 
