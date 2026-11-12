@@ -14,104 +14,41 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Increase swap space
-        run: |
-          echo "Current memory and swap:"
-          free -h
-          sudo swapoff -a || true
-          sudo fallocate -l 10G /swapfile || sudo dd if=/dev/zero of=/swapfile bs=1M count=10240
-          sudo chmod 600 /swapfile
-          sudo mkswap /swapfile
-          sudo swapon /swapfile
-          echo "Updated memory and swap:"
-          free -h
-
       - name: Checkout Source Code
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
-      - name: Set up Java 21
+      - name: Set up Java 17
         uses: actions/setup-java@v4
         with:
           distribution: 'temurin'
-          java-version: '21'
+          java-version: '17'
 
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v4
 
-      - name: Ensure .env file
-        run: |
-          if [ ! -f ".env" ]; then
-            touch .env
-          fi
-
       - name: Setup debug keystore
         run: |
-          if [ -f "debug.keystore.base64" ]; then
-            base64 -d debug.keystore.base64 > debug.keystore
-          elif [ ! -f "debug.keystore" ]; then
-            keytool -genkey -v -keystore debug.keystore -storepass android -alias androiddebugkey -keypass android -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=Android Debug,O=Android,C=US"
-          fi
-          cp debug.keystore app/debug.keystore || true
-          mkdir -p ~/.android && cp debug.keystore ~/.android/debug.keystore || true
-
-      - name: Accept Android SDK Licenses & Install Components
-        run: |
-          yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --licenses || true
-          $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager "platforms;android-35" "build-tools;36.0.0" "platform-tools" || true
-
-      - name: Grant Execute Permission to Gradle
-        run: chmod +x gradlew
+          mkdir -p ~/.android
+          keytool -genkey -v -keystore ~/.android/debug.keystore -storepass android -alias androiddebugkey -keypass android -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=Android Debug,O=Android,C=US"
 
       - name: Build Debug APK with Gradle
-        env:
-          GRADLE_OPTS: "-Dorg.gradle.jvmargs=-Xmx2560m -XX:MaxMetaspaceSize=512m -XX:+UseG1GC -Dfile.encoding=UTF-8"
-        run: |
-          ./gradlew :app:assembleDebug -x test -x lint -x check --stacktrace
-
-      - name: Locate and Copy Generated APK
-        run: |
-          mkdir -p /tmp/apk_output
-          echo "Listing all APKs in workspace for debug:"
-          find . -name "*.apk" -ls
-          
-          # Prioritize finding the APK in the standard location
-          APK_FILE=$(find app/build/outputs/apk/debug -name "app-debug.apk" | head -n 1)
-          
-          # If not found, look anywhere
-          if [ -z "$APK_FILE" ]; then
-            APK_FILE=$(find . -name "app-debug.apk" | head -n 1)
-          fi
-          
-          if [ -n "$APK_FILE" ] && [ -f "$APK_FILE" ]; then
-            echo "Found APK at: $APK_FILE"
-            cp "$APK_FILE" /tmp/apk_output/OL-Guru-Debug.apk
-          else
-            echo "ERROR: No APK found after build!"
-            exit 1
-          fi
-
-      - name: Upload APK as Workflow Artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: OL-Guru-Debug-APK
-          path: /tmp/apk_output/OL-Guru-Debug.apk
-          retention-days: 30
+        run: ./gradlew :app:assembleDebug -x test -x lint -x check --stacktrace
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: "v1.0.${{ github.run_number }}"
-          name: "O/L Guru Android App v1.0.${{ github.run_number }}"
+          name: "O/L Guru Android App Release v1.0.${{ github.run_number }}"
           body: |
-            ### 📱 O/L Guru Android App Direct APK Download
+            ### 📱 O/L Guru Android App Official APK
             - **Status**: Ready to install
             - **Build Number**: ${{ github.run_number }}
             
-            👇 **Download `OL-Guru-Debug.apk` below:**
+            👇 **Download `app-debug.apk` directly below:**
           draft: false
           prerelease: false
-          files: /tmp/apk_output/OL-Guru-Debug.apk
+          files: app/build/outputs/apk/debug/app-debug.apk
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
