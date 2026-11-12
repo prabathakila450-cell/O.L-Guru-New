@@ -16,14 +16,14 @@ jobs:
     steps:
       - name: Increase swap space
         run: |
-          echo "Free memory before swap allocation:"
+          echo "Current memory and swap:"
           free -h
           sudo swapoff -a || true
-          sudo fallocate -l 8G /swapfile || sudo dd if=/dev/zero of=/swapfile bs=1M count=8192
+          sudo fallocate -l 10G /swapfile || sudo dd if=/dev/zero of=/swapfile bs=1M count=10240
           sudo chmod 600 /swapfile
           sudo mkswap /swapfile
           sudo swapon /swapfile
-          echo "Free memory after swap allocation:"
+          echo "Updated memory and swap:"
           free -h
 
       - name: Checkout Source Code
@@ -66,35 +66,31 @@ jobs:
 
       - name: Build Debug APK with Gradle
         env:
-          GRADLE_OPTS: "-Dorg.gradle.jvmargs=-Xmx4096m -XX:MaxMetaspaceSize=1024m -XX:+UseG1GC -Dfile.encoding=UTF-8"
+          GRADLE_OPTS: "-Dorg.gradle.jvmargs=-Xmx2560m -XX:MaxMetaspaceSize=512m -XX:+UseG1GC -Dfile.encoding=UTF-8"
         run: |
-          ./gradlew :app:assembleDebug -x test -x lint -x check --no-parallel --stacktrace
+          ./gradlew :app:assembleDebug -x test -x lint -x check --stacktrace
 
       - name: Locate and Copy Generated APK
         run: |
           mkdir -p /tmp/apk_output
-          echo "Locating built APK..."
+          echo "Listing all APKs in workspace for debug:"
+          find . -name "*.apk" -ls
           
-          if [ -f "app/build/outputs/apk/debug/app-debug.apk" ]; then
-            APK_FILE="app/build/outputs/apk/debug/app-debug.apk"
-          else
+          # Prioritize finding the APK in the standard location
+          APK_FILE=$(find app/build/outputs/apk/debug -name "app-debug.apk" | head -n 1)
+          
+          # If not found, look anywhere
+          if [ -z "$APK_FILE" ]; then
             APK_FILE=$(find . -name "app-debug.apk" | head -n 1)
-          fi
-          
-          if [ -z "$APK_FILE" ] || [ ! -f "$APK_FILE" ]; then
-            APK_FILE=$(find . -name "*.apk" | head -n 1)
           fi
           
           if [ -n "$APK_FILE" ] && [ -f "$APK_FILE" ]; then
             echo "Found APK at: $APK_FILE"
             cp "$APK_FILE" /tmp/apk_output/OL-Guru-Debug.apk
           else
-            echo "ERROR: APK file could not be found!"
-            find app/build -maxdepth 5 -ls || true
+            echo "ERROR: No APK found after build!"
             exit 1
           fi
-          
-          ls -la /tmp/apk_output/
 
       - name: Upload APK as Workflow Artifact
         uses: actions/upload-artifact@v4
@@ -103,17 +99,17 @@ jobs:
           path: /tmp/apk_output/OL-Guru-Debug.apk
           retention-days: 30
 
-      - name: Create GitHub Release with Direct APK Asset
+      - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: "v1.0.${{ github.run_number }}"
           name: "O/L Guru Android App v1.0.${{ github.run_number }}"
           body: |
             ### 📱 O/L Guru Android App Direct APK Download
-            - **Status**: Ready to install directly on your Android device!
+            - **Status**: Ready to install
             - **Build Number**: ${{ github.run_number }}
             
-            👇 **Click below on `OL-Guru-Debug.apk` under Assets to download and install immediately:**
+            👇 **Download `OL-Guru-Debug.apk` below:**
           draft: false
           prerelease: false
           files: /tmp/apk_output/OL-Guru-Debug.apk
