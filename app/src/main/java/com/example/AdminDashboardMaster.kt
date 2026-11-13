@@ -33,6 +33,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.AdminPanelSettings
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.CheckCircle
@@ -49,6 +50,7 @@ import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Phone
 import androidx.compose.material.icons.filled.PhoneAndroid
+import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Send
 import androidx.compose.material.icons.filled.Star
@@ -259,6 +261,73 @@ fun AdminDashboardMasterDialog(
               }
 
               Row(verticalAlignment = Alignment.CenterVertically) {
+                var isCloudRefreshing by remember { mutableStateOf(false) }
+                // Cloud Sync Refresh Button
+                OutlinedButton(
+                  onClick = {
+                    if (!isCloudRefreshing) {
+                      isCloudRefreshing = true
+                      coroutineScope.launch {
+                        val res = CloudAuthManager.fetchAllUsersFromCloud(context)
+                        isCloudRefreshing = false
+                        res.onSuccess { cloudUsers ->
+                          cloudUsers.forEach { cloudUser ->
+                            val normCloud = CloudAuthManager.normalizePhoneKey(cloudUser.usernameOrPhone)
+                            val existingIdx = registeredUsers.indexOfFirst {
+                              CloudAuthManager.normalizePhoneKey(it.usernameOrPhone) == normCloud
+                            }
+                            if (existingIdx >= 0) {
+                              val local = registeredUsers[existingIdx]
+                              registeredUsers[existingIdx] = local.copy(
+                                fullName = cloudUser.fullName.ifBlank { local.fullName },
+                                password = cloudUser.password.ifBlank { local.password },
+                                isApproved = cloudUser.isApproved,
+                                approvalTimestamp = cloudUser.approvalTimestamp,
+                                paymentStatus = cloudUser.paymentStatus,
+                                requestedGradePackage = cloudUser.requestedGradePackage.ifBlank { local.requestedGradePackage },
+                                approvedGrades = if (cloudUser.approvedGrades.isNotEmpty()) cloudUser.approvedGrades else local.approvedGrades,
+                                boundDeviceId = cloudUser.boundDeviceId,
+                                boundDeviceName = cloudUser.boundDeviceName,
+                                boundDate = cloudUser.boundDate,
+                                slipImageUri = cloudUser.slipImageUri ?: local.slipImageUri,
+                                requestDate = cloudUser.requestDate ?: local.requestDate,
+                                requestTimestamp = cloudUser.requestTimestamp ?: local.requestTimestamp
+                              )
+                            } else {
+                              registeredUsers.add(cloudUser)
+                            }
+                          }
+                          onUsersUpdated()
+                          val pNow = registeredUsers.count { !it.isApproved && !isAuthorizedAdminUser(it.usernameOrPhone) }
+                          Toast.makeText(
+                            context,
+                            "☁️ Cloud යාවත්කාලීන විය! අනුමැතියට: $pNow",
+                            Toast.LENGTH_SHORT
+                          ).show()
+                        }.onFailure { err ->
+                          Toast.makeText(
+                            context,
+                            "⚠️ Cloud Sync අසාර්ථකයි: ${err.localizedMessage ?: "අන්තර්ජාලය පරීක්ෂා කරන්න"}",
+                            Toast.LENGTH_LONG
+                          ).show()
+                        }
+                      }
+                    }
+                  },
+                  enabled = !isCloudRefreshing,
+                  colors = ButtonDefaults.outlinedButtonColors(contentColor = Color(0xFF38BDF8)),
+                  border = BorderStroke(1.dp, Color(0xFF38BDF8)),
+                  shape = RoundedCornerShape(8.dp),
+                  contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp),
+                  modifier = Modifier.height(32.dp)
+                ) {
+                  Icon(Icons.Default.Refresh, contentDescription = "Sync Cloud", modifier = Modifier.size(14.dp))
+                  Spacer(modifier = Modifier.width(3.dp))
+                  Text(if (isCloudRefreshing) "..." else "Sync", fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                }
+
+                Spacer(modifier = Modifier.width(6.dp))
+
                 // Logout Admin Button
                 OutlinedButton(
                   onClick = {
@@ -505,13 +574,15 @@ private fun UserManagementSection(
   coroutineScope: kotlinx.coroutines.CoroutineScope
 ) {
   val context = LocalContext.current
+  val isCloudReady = remember { CloudAuthManager.isCloudAvailable(context) }
+  var showManualApproveDialog by remember { mutableStateOf(false) }
 
-  val pCount = remember(registeredUsers.size, registeredUsers.map { it.isApproved }) {
+  val pCount = remember(registeredUsers.toList()) {
     registeredUsers.count { !it.isApproved && !isAuthorizedAdminUser(it.usernameOrPhone) }
   }
 
   // Filtered and Priority-Sorted list (Pending Requests ALWAYS at the very top!)
-  val filteredList = remember(registeredUsers.size, registeredUsers.map { it.isApproved to it.paymentStatus }, searchQuery, filterStatus) {
+  val filteredList = remember(registeredUsers.toList(), searchQuery, filterStatus) {
     registeredUsers.filter { user ->
       val matchesSearch = searchQuery.isBlank() ||
         user.fullName.contains(searchQuery, ignoreCase = true) ||
@@ -546,6 +617,44 @@ private fun UserManagementSection(
     verticalArrangement = Arrangement.spacedBy(8.dp),
     contentPadding = PaddingValues(bottom = 24.dp)
   ) {
+    if (!isCloudReady) {
+      item(key = "admin_cloud_warning") {
+        Surface(
+          shape = RoundedCornerShape(10.dp),
+          color = Color(0xFFFEF2F2),
+          border = BorderStroke(1.dp, Color(0xFFFCA5A5)),
+          modifier = Modifier.fillMaxWidth()
+        ) {
+          Text(
+            text = "⚠️ මෙම APK ගොනුව තුළ Firebase Cloud (google-services.json) සක්‍රීය නැත! වෙනත් දුරකථනවල ඉල්ලීම් Cloud හරහා ලැබීමට google-services.json සහිතව APK එක Build කළ යුතුය.",
+            fontSize = 10.sp,
+            fontWeight = FontWeight.SemiBold,
+            color = Color(0xFF991B1B),
+            modifier = Modifier.padding(10.dp)
+          )
+        }
+      }
+    }
+
+    // 0. Quick Add & Approve Student Button (for WhatsApp / Phone requests)
+    item(key = "admin_manual_approve_btn") {
+      Button(
+        onClick = { showManualApproveDialog = true },
+        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF059669)),
+        shape = RoundedCornerShape(10.dp),
+        modifier = Modifier.fillMaxWidth().height(40.dp),
+        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp)
+      ) {
+        Icon(Icons.Default.Add, contentDescription = "Add Student", modifier = Modifier.size(16.dp))
+        Spacer(modifier = Modifier.width(6.dp))
+        Text(
+          text = "➕ දුරකථන අංකයකින් ශිෂ්‍යයෙකු එක් කර අනුමත කරන්න (WhatsApp / Manual)",
+          fontSize = 10.5.sp,
+          fontWeight = FontWeight.Bold
+        )
+      }
+    }
+
     // 1. Search Bar item (Fully scrollable)
     item(key = "admin_search_bar") {
       OutlinedTextField(
@@ -731,13 +840,16 @@ private fun UserManagementSection(
               )
               registeredUsers[idx] = updatedUser
               onUsersUpdated()
-              
+
               // Cloud Sync
               coroutineScope.launch {
-                CloudAuthManager.syncUserToCloud(context, updatedUser)
+                val res = CloudAuthManager.syncUserToCloud(context, updatedUser)
+                if (res.isSuccess) {
+                  Toast.makeText(context, "✅ ${user.fullName} මාස 6කට අනුමත කර Cloud වෙත යවන ලදී!", Toast.LENGTH_SHORT).show()
+                } else {
+                  Toast.makeText(context, "⚠️ අනුමත කළ නමුත් Cloud Sync අසාර්ථකයි: ${res.exceptionOrNull()?.localizedMessage ?: ""}", Toast.LENGTH_LONG).show()
+                }
               }
-              
-              Toast.makeText(context, "${user.fullName} හට මාස 6කට (දින 180) සාර්ථකව අනුමත කරන ලදී!", Toast.LENGTH_SHORT).show()
             }
           },
           onRevoke = {
@@ -746,12 +858,15 @@ private fun UserManagementSection(
               val updatedUser = user.copy(isApproved = false, paymentStatus = "Revoked")
               registeredUsers[idx] = updatedUser
               onUsersUpdated()
-              
+
               // Cloud Sync
               coroutineScope.launch {
-                CloudAuthManager.syncUserToCloud(context, updatedUser)
+                val res = CloudAuthManager.syncUserToCloud(context, updatedUser)
+                if (res.isFailure) {
+                  Toast.makeText(context, "⚠️ Cloud Sync අසාර්ථකයි: ${res.exceptionOrNull()?.localizedMessage ?: ""}", Toast.LENGTH_LONG).show()
+                }
               }
-              
+
               Toast.makeText(context, "${user.fullName} අනුමැතිය අවලංගු කරන ලදී.", Toast.LENGTH_SHORT).show()
             }
           },
@@ -832,6 +947,137 @@ private fun UserManagementSection(
         )
       }
     }
+  }
+
+  if (showManualApproveDialog) {
+    var manualName by remember { mutableStateOf("") }
+    var manualPhone by remember { mutableStateOf("") }
+    var manualPackage by remember { mutableStateOf("06 සිට 11 දක්වා සියලුම ශ්‍රේණි (All Grades)") }
+    var isSavingManual by remember { mutableStateOf(false) }
+
+    AlertDialog(
+      onDismissRequest = { if (!isSavingManual) showManualApproveDialog = false },
+      title = {
+        Text(
+          text = "➕ ශිෂ්‍යයෙකු අතින් එක් කර අනුමත කරන්න",
+          fontWeight = FontWeight.Bold,
+          fontSize = 14.sp,
+          color = Color(0xFF0F172A)
+        )
+      },
+      text = {
+        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+          Text(
+            text = "WhatsApp හරහා ඉල්ලුම් කළ ශිෂ්‍යයාගේ නම සහ දුරකථන අංකය ඇතුළත් කර අනුමත කරන්න. ශිෂ්‍යයා ඇප් එක විවෘත කළ විට ස්වයංක්‍රීයව සක්‍රීය වේ.",
+            fontSize = 11.sp,
+            color = Color(0xFF475569)
+          )
+          OutlinedTextField(
+            value = manualName,
+            onValueChange = { manualName = it },
+            label = { Text("ශිෂ්‍යයාගේ නම (Name)") },
+            singleLine = true,
+            modifier = Modifier.fillMaxWidth()
+          )
+          OutlinedTextField(
+            value = manualPhone,
+            onValueChange = { manualPhone = it },
+            label = { Text("දුරකථන අංකය (Phone Number)") },
+            placeholder = { Text("07XXXXXXXX") },
+            singleLine = true,
+            modifier = Modifier.fillMaxWidth()
+          )
+          Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(6.dp)
+          ) {
+            FilterChip(
+              selected = manualPackage.contains("All"),
+              onClick = { manualPackage = "06 සිට 11 දක්වා සියලුම ශ්‍රේණි (All Grades)" },
+              label = { Text("06-11 සියල්ල", fontSize = 10.sp) }
+            )
+            FilterChip(
+              selected = manualPackage.contains("10 සහ 11"),
+              onClick = { manualPackage = "10 සහ 11 ශ්‍රේණි (O/L Combo Pack)" },
+              label = { Text("10+11 O/L", fontSize = 10.sp) }
+            )
+          }
+        }
+      },
+      confirmButton = {
+        Button(
+          onClick = {
+            val cleanPhone = manualPhone.trim()
+            if (cleanPhone.isBlank()) {
+              Toast.makeText(context, "කරුණාකර දුරකථන අංකය ඇතුළත් කරන්න", Toast.LENGTH_SHORT).show()
+              return@Button
+            }
+            val now = System.currentTimeMillis()
+            val normPhone = CloudAuthManager.normalizePhoneKey(cleanPhone)
+            val existingIdx = registeredUsers.indexOfFirst {
+              CloudAuthManager.normalizePhoneKey(it.usernameOrPhone) == normPhone
+            }
+            val grades = getApprovedGradesForPackage(manualPackage)
+            val approvedAcc = if (existingIdx >= 0) {
+              registeredUsers[existingIdx].copy(
+                fullName = manualName.trim().ifBlank { registeredUsers[existingIdx].fullName },
+                isApproved = true,
+                paymentStatus = "Approved",
+                requestedGradePackage = manualPackage,
+                approvedGrades = grades,
+                approvalTimestamp = now
+              )
+            } else {
+              UserAccount(
+                id = now.toString(),
+                fullName = manualName.trim().ifBlank { cleanPhone },
+                usernameOrPhone = cleanPhone,
+                password = "1234",
+                isApproved = true,
+                paymentStatus = "Approved",
+                requestedGradePackage = manualPackage,
+                approvedGrades = grades,
+                boundDeviceId = null,
+                boundDeviceName = null,
+                approvalTimestamp = now,
+                requestDate = java.text.SimpleDateFormat("yyyy-MM-dd HH:mm", java.util.Locale.getDefault()).format(java.util.Date(now)),
+                requestTimestamp = now
+              )
+            }
+            if (existingIdx >= 0) {
+              registeredUsers[existingIdx] = approvedAcc
+            } else {
+              registeredUsers.add(0, approvedAcc)
+            }
+            onUsersUpdated()
+            isSavingManual = true
+            coroutineScope.launch {
+              val res = CloudAuthManager.syncUserToCloud(context, approvedAcc)
+              isSavingManual = false
+              showManualApproveDialog = false
+              if (res.isSuccess) {
+                Toast.makeText(context, "✅ ${approvedAcc.fullName} සාර්ථකව අනුමත කර Cloud වෙත යවන ලදී!", Toast.LENGTH_LONG).show()
+              } else {
+                Toast.makeText(context, "⚠️ දේශීයව අනුමත විය, නමුත් Cloud Sync අසාර්ථකයි: ${res.exceptionOrNull()?.localizedMessage ?: ""}", Toast.LENGTH_LONG).show()
+              }
+            }
+          },
+          enabled = !isSavingManual,
+          colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF059669)),
+          shape = RoundedCornerShape(8.dp)
+        ) {
+          Text(if (isSavingManual) "සුරකිමින්..." else "✅ අනුමත කරන්න (Approve)")
+        }
+      },
+      dismissButton = {
+        TextButton(
+          onClick = { showManualApproveDialog = false },
+          enabled = !isSavingManual
+        ) {
+          Text("අවලංගු කරන්න")
+        }
+      }
+    )
   }
 }
 
