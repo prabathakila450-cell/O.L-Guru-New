@@ -73,14 +73,24 @@ jobs:
           elif [ ! -f debug.keystore ]; then
             keytool -genkey -v -keystore debug.keystore -storepass android -alias androiddebugkey -keypass android -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=Android Debug,O=Android,C=US"
           fi
+          if [ ! -f app/google-services.json ]; then
+            if [ -n "${GOOGLE_SERVICES_JSON_BASE64:-}" ]; then
+              echo "$GOOGLE_SERVICES_JSON_BASE64" | base64 -d > app/google-services.json
+              echo "Restored app/google-services.json from GitHub Secret."
+            else
+              echo "::warning::app/google-services.json not found; build will continue, but Firebase/Google Sign-In requires google-services.json at runtime."
+            fi
+          fi
           mkdir -p ~/.android && cp debug.keystore ~/.android/debug.keystore
+        env:
+          GOOGLE_SERVICES_JSON_BASE64: ${{ secrets.GOOGLE_SERVICES_JSON_BASE64 }}
 
       - name: Build Debug APK with Gradle
         run: |
           export ANDROID_SDK_ROOT="${ANDROID_SDK_ROOT:-/usr/local/lib/android/sdk}"
           export ANDROID_HOME="${ANDROID_HOME:-$ANDROID_SDK_ROOT}"
           set -o pipefail
-          if ! ./gradlew :app:assembleDebug -x test -x lint -x check --no-daemon --no-build-cache --max-workers=1 --stacktrace 2>&1 | tee gradle_build.log; then
+          if ! ./gradlew :app:assembleDebug -x test -x lint -x check --no-daemon --no-build-cache --max-workers=2 --stacktrace 2>&1 | tee gradle_build.log; then
             echo "================ EXACT ERROR SUMMARY ===================="
             grep -vE '^[[:space:]]*(at |\.\.\. [0-9]+ more)' gradle_build.log | tail -n 15 || true
             echo "================ COMPILER / BUILD ERRORS ================"

@@ -1,5 +1,6 @@
 package com.example
 
+import android.annotation.SuppressLint
 import android.app.Activity
 import android.os.Build
 import android.os.Handler
@@ -546,9 +547,22 @@ fun onGoogleSignInClicked(
   scope: kotlinx.coroutines.CoroutineScope,
   onAuthCancelled: () -> Unit = {}
 ) {
-  val clientId = try {
-    context.getString(R.string.default_web_client_id)
-  } catch (e: Exception) {
+  @SuppressLint("DiscouragedApi")
+  val clientIdResId = context.resources.getIdentifier(
+    "default_web_client_id",
+    "string",
+    context.packageName
+  )
+  val clientId = if (clientIdResId != 0) {
+    try {
+      context.getString(clientIdResId)
+    } catch (_: Exception) {
+      ""
+    }
+  } else {
+    ""
+  }
+  if (clientId.isBlank()) {
     onAuthError("Google Sign-In configuration missing: default_web_client_id not found")
     return
   }

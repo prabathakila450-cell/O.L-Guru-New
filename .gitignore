@@ -1,6 +1,10 @@
 *.iml
 .gradle
+.gradle/
+**/.gradle/
 .kotlin
+.kotlin/
+**/.kotlin/
 /local.properties
 /.idea/caches
 /.idea/libraries
@@ -10,16 +14,19 @@
 /.idea/assetWizardSettings.xml
 .DS_Store
 /build
+build/
+**/build/
 /captures
 .externalNativeBuild
 .cxx
 local.properties
 .env
 debug.keystore
-**/build/
 *.apk
 *.aab
 *.ap_
+*.dex
+*.class
 *.log
 gradle_build.log
 hs_err_pid*.log
@@ -28,3 +35,4 @@ hs_err_pid*.log
 /.build-outputs/
 /.aistudio/
 /assets/
+
