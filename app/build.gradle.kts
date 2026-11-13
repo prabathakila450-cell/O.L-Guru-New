@@ -1,7 +1,6 @@
 android {
     namespace = "com.aistudio.studentportal.slnotes.mqvsiz"
     compileSdk = 35
-    buildToolsVersion = "36.0.0"
 
     defaultConfig {
         applicationId = "com.aistudio.studentportal.slnotes.mqvsiz"
@@ -9,6 +8,5 @@ android {
         targetSdk = 35
         versionCode = 3
         versionName = "1.2"
-        multiDexEnabled = true
     }
 }
