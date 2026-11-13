@@ -1,18 +1,32 @@
 plugins {
     id("com.android.application")
-    id("kotlin-android")
+    id("org.jetbrains.kotlin.android")
+    id("dev.flutter.flutter-gradle-plugin")
     id("com.google.gms.google-services")
 }
 
 android {
     namespace = "com.aistudio.studentportal.slnotes.mqvsiz"
-    compileSdk = 35
+    compileSdk = flutter.compileSdkVersion.toInt()
+
+    compileOptions {
+        sourceCompatibility = JavaVersion.VERSION_1_8
+        targetCompatibility = JavaVersion.VERSION_1_8
+    }
+
+    kotlinOptions {
+        jvmTarget = "1.8"
+    }
 
     defaultConfig {
         applicationId = "com.aistudio.studentportal.slnotes.mqvsiz"
         minSdk = 21
-        targetSdk = 35
-        versionCode = 3
-        versionName = "1.2"
+        targetSdk = flutter.targetSdkVersion.getVersionCode()
+        versionCode = flutter.versionCode.toInt()
+        versionName = flutter.versionName
     }
+}
+
+flutter {
+    source = "../.."
 }
