@@ -39,6 +39,10 @@ object PersistentTrialSecurityManager {
   @Deprecated("Use TWENTY_FOUR_HOURS_MILLIS", ReplaceWith("TWENTY_FOUR_HOURS_MILLIS"))
   const val TWELVE_HOURS_MILLIS = TWENTY_FOUR_HOURS_MILLIS
 
+  @Volatile
+  private var lastExternalSyncTimestamp: Long = 0L
+  private const val EXTERNAL_SYNC_INTERVAL_MS = 60_000L
+
   /**
    * Retrieves the constant hardware-level unique identifier for this physical phone/device.
    */
@@ -175,21 +179,24 @@ object PersistentTrialSecurityManager {
     var prefsExpired = prefs.getBoolean(KEY_PERMANENTLY_EXPIRED, false)
     var prefsLastSeen = prefs.getLong(KEY_LAST_SEEN_TIMESTAMP, 0L)
 
-    // Check external persistent storage that survives uninstalls
-    val extRecord = readExternalDeviceRecord(context)
-    if (extRecord != null) {
-      if (prefsInstallTime == 0L || extRecord.firstInstallTime < prefsInstallTime) {
-        prefsInstallTime = extRecord.firstInstallTime
-      }
-      if (extRecord.isPermanentlyExpired) {
-        prefsExpired = true
-      }
-      if (extRecord.lastSeenTime > prefsLastSeen) {
-        prefsLastSeen = extRecord.lastSeenTime
+    val now = System.currentTimeMillis()
+    val shouldSyncExternal = prefsInstallTime == 0L || (now - lastExternalSyncTimestamp) >= EXTERNAL_SYNC_INTERVAL_MS
+
+    if (shouldSyncExternal) {
+      // Check external persistent storage that survives uninstalls
+      val extRecord = readExternalDeviceRecord(context)
+      if (extRecord != null) {
+        if (prefsInstallTime == 0L || extRecord.firstInstallTime < prefsInstallTime) {
+          prefsInstallTime = extRecord.firstInstallTime
+        }
+        if (extRecord.isPermanentlyExpired) {
+          prefsExpired = true
+        }
+        if (extRecord.lastSeenTime > prefsLastSeen) {
+          prefsLastSeen = extRecord.lastSeenTime
+        }
       }
     }
-
-    val now = System.currentTimeMillis()
 
     // Brand new first install on this hardware
     if (prefsInstallTime == 0L) {
@@ -197,7 +204,7 @@ object PersistentTrialSecurityManager {
       prefsLastSeen = now
     }
 
-    // Save and sync back to both SharedPreferences and external storage files
+    // Save and sync back to SharedPreferences (fast) and throttle external storage writes
     prefs.edit()
       .putLong(KEY_INSTALL_TIMESTAMP, prefsInstallTime)
       .putBoolean(KEY_PERMANENTLY_EXPIRED, prefsExpired)
@@ -205,15 +212,18 @@ object PersistentTrialSecurityManager {
       .putString(KEY_DEVICE_HARDWARE_ID, hardwareId)
       .apply()
 
-    writeExternalDeviceRecord(
-      context,
-      DeviceRecord(
-        firstInstallTime = prefsInstallTime,
-        isPermanentlyExpired = prefsExpired,
-        lastSeenTime = maxOf(now, prefsLastSeen),
-        deviceId = hardwareId
+    if (shouldSyncExternal) {
+      lastExternalSyncTimestamp = now
+      writeExternalDeviceRecord(
+        context,
+        DeviceRecord(
+          firstInstallTime = prefsInstallTime,
+          isPermanentlyExpired = prefsExpired,
+          lastSeenTime = maxOf(now, prefsLastSeen),
+          deviceId = hardwareId
+        )
       )
-    )
+    }
 
     return prefsInstallTime
   }

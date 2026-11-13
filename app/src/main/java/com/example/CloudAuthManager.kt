@@ -2,8 +2,10 @@ package com.example
 
 import android.content.Context
 import android.util.Log
+import com.google.firebase.FirebaseApp
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.FirebaseFirestoreSettings
+import com.google.firebase.firestore.ListenerRegistration
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
@@ -14,22 +16,35 @@ object CloudAuthManager {
     private const val COLLECTION_USERS = "users"
     private var isSettingsConfigured = false
 
-    private fun getFirestore(context: Context): FirebaseFirestore {
-        val db = FirebaseFirestore.getInstance(context.getString(R.string.firestore_database_id))
-        if (!isSettingsConfigured) {
-            try {
-                val settings = FirebaseFirestoreSettings.Builder()
-                    .setPersistenceEnabled(true)
-                    .build()
-                db.firestoreSettings = settings
-                isSettingsConfigured = true
-            } catch (e: Exception) {
-                // Settings can only be set before any other operations on the instance, or if already set
-                Log.d(TAG, "Firestore settings already configured or set: ${e.localizedMessage}")
-                isSettingsConfigured = true
+    private fun getFirestore(context: Context): FirebaseFirestore? {
+        return try {
+            if (FirebaseApp.getApps(context).isEmpty()) {
+                FirebaseApp.initializeApp(context)
             }
+            if (FirebaseApp.getApps(context).isEmpty()) {
+                Log.w(TAG, "FirebaseApp is not initialized (missing google-services.json); cloud sync skipped.")
+                return null
+            }
+            val dbId = context.getString(R.string.firestore_database_id)
+            val db = FirebaseFirestore.getInstance(dbId)
+            if (!isSettingsConfigured) {
+                try {
+                    val settings = FirebaseFirestoreSettings.Builder()
+                        .setPersistenceEnabled(true)
+                        .build()
+                    db.firestoreSettings = settings
+                    isSettingsConfigured = true
+                } catch (e: Exception) {
+                    // Settings can only be set before any other operations on the instance, or if already set
+                    Log.d(TAG, "Firestore settings already configured or set: ${e.localizedMessage}")
+                    isSettingsConfigured = true
+                }
+            }
+            db
+        } catch (e: Throwable) {
+            Log.w(TAG, "Firestore unavailable on this build: ${e.localizedMessage}")
+            null
         }
-        return db
     }
 
     private fun buildDocId(usernameOrPhone: String): String {
@@ -38,7 +53,7 @@ object CloudAuthManager {
 
     suspend fun syncUserToCloud(context: Context, user: UserAccount) {
         try {
-            val db = getFirestore(context)
+            val db = getFirestore(context) ?: return
             val docId = buildDocId(user.usernameOrPhone)
             if (docId.isBlank()) return
 
@@ -55,7 +70,7 @@ object CloudAuthManager {
      */
     suspend fun syncUserIfMissing(context: Context, user: UserAccount) {
         try {
-            val db = getFirestore(context)
+            val db = getFirestore(context) ?: return
             val docId = buildDocId(user.usernameOrPhone)
             if (docId.isBlank()) return
 
@@ -72,7 +87,7 @@ object CloudAuthManager {
 
     suspend fun deleteUserFromCloud(context: Context, usernameOrPhone: String) {
         try {
-            val db = getFirestore(context)
+            val db = getFirestore(context) ?: return
             val docId = buildDocId(usernameOrPhone)
             if (docId.isBlank()) return
 
@@ -84,26 +99,36 @@ object CloudAuthManager {
     }
 
     fun observeAllUsers(context: Context): Flow<List<UserAccount>> = callbackFlow {
-        val db = getFirestore(context)
-        val listener = db.collection(COLLECTION_USERS)
-            .addSnapshotListener { snapshot, error ->
-                if (error != null) {
-                    Log.e(TAG, "Error observing users", error)
-                    return@addSnapshotListener
-                }
-                val users = snapshot?.documents?.mapNotNull { doc ->
-                    val parsed = doc.toObject(UserAccount::class.java) ?: return@mapNotNull null
-                    val rawApproved = doc.getBoolean("isApproved") ?: doc.getBoolean("approved") ?: parsed.isApproved
-                    parsed.copy(isApproved = rawApproved)
-                } ?: emptyList()
-                trySend(users)
+        var listener: ListenerRegistration? = null
+        try {
+            val db = getFirestore(context)
+            if (db == null) {
+                close()
+            } else {
+                listener = db.collection(COLLECTION_USERS)
+                    .addSnapshotListener { snapshot, error ->
+                        if (error != null) {
+                            Log.e(TAG, "Error observing users", error)
+                            return@addSnapshotListener
+                        }
+                        val users = snapshot?.documents?.mapNotNull { doc ->
+                            val parsed = doc.toObject(UserAccount::class.java) ?: return@mapNotNull null
+                            val rawApproved = doc.getBoolean("isApproved") ?: doc.getBoolean("approved") ?: parsed.isApproved
+                            parsed.copy(isApproved = rawApproved)
+                        } ?: emptyList()
+                        trySend(users)
+                    }
             }
-        awaitClose { listener.remove() }
+        } catch (e: Throwable) {
+            Log.e(TAG, "Failed to attach Firestore user observer", e)
+            close()
+        }
+        awaitClose { listener?.remove() }
     }
 
     suspend fun updateUserApproval(context: Context, usernameOrPhone: String, isApproved: Boolean, timestamp: Long?) {
         try {
-            val db = getFirestore(context)
+            val db = getFirestore(context) ?: return
             val docId = buildDocId(usernameOrPhone)
             if (docId.isBlank()) return
             db.collection(COLLECTION_USERS).document(docId).update(

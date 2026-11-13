@@ -631,13 +631,19 @@ class MainActivity : ComponentActivity() {
         android.graphics.Color.TRANSPARENT
       )
     )
-    // Initialize Google AdMob & Start 30-Minute Automatic Full-Screen Interstitial Timer
-    AdMobManager.initialize(this)
-    AdMobManager.startInterstitialTimer(this)
-
     setContent {
       MyApplicationTheme(eyeCareMode = EyeCareThemeMode.LIGHT) {
         StudentPortalApp()
+      }
+    }
+
+    // Initialize Google AdMob & Start 30-Minute Automatic Full-Screen Interstitial Timer after first frame
+    Handler(Looper.getMainLooper()).post {
+      try {
+        AdMobManager.initialize(this)
+        AdMobManager.startInterstitialTimer(this)
+      } catch (e: Throwable) {
+        Log.e("MainActivity", "Deferred AdMob initialization failed", e)
       }
     }
   }
@@ -734,47 +740,51 @@ fun StudentPortalApp() {
   // Cloud Sync: Observe users from Firestore and merge with local state
   val coroutineScope = androidx.compose.runtime.rememberCoroutineScope()
   LaunchedEffect(Unit) {
-    CloudAuthManager.observeAllUsers(context).collect { cloudUsers ->
-      cloudUsers.forEach { cloudUser ->
-        val existingIndex = registeredUsers.indexOfFirst { 
-          it.usernameOrPhone.trim().equals(cloudUser.usernameOrPhone.trim(), ignoreCase = true) 
-        }
-        if (existingIndex >= 0) {
-          // Cloud data takes precedence for approval status, grades, and device binding
-          val local = registeredUsers[existingIndex]
-          val updated = local.copy(
-            isApproved = cloudUser.isApproved,
-            approvalTimestamp = cloudUser.approvalTimestamp,
-            paymentStatus = cloudUser.paymentStatus,
-            approvedGrades = if (cloudUser.approvedGrades.isNotEmpty()) cloudUser.approvedGrades else local.approvedGrades,
-            boundDeviceId = cloudUser.boundDeviceId,
-            boundDeviceName = cloudUser.boundDeviceName,
-            boundDate = cloudUser.boundDate
-          )
-          if (updated != local) {
-            registeredUsers[existingIndex] = updated
+    try {
+      CloudAuthManager.observeAllUsers(context).collect { cloudUsers ->
+        cloudUsers.forEach { cloudUser ->
+          val existingIndex = registeredUsers.indexOfFirst { 
+            it.usernameOrPhone.trim().equals(cloudUser.usernameOrPhone.trim(), ignoreCase = true) 
           }
-          if (loggedInUser?.usernameOrPhone?.trim()?.equals(cloudUser.usernameOrPhone.trim(), ignoreCase = true) == true) {
-            val currentLogged = loggedInUser!!
-            val updatedLogged = currentLogged.copy(
+          if (existingIndex >= 0) {
+            // Cloud data takes precedence for approval status, grades, and device binding
+            val local = registeredUsers[existingIndex]
+            val updated = local.copy(
               isApproved = cloudUser.isApproved,
               approvalTimestamp = cloudUser.approvalTimestamp,
               paymentStatus = cloudUser.paymentStatus,
-              approvedGrades = if (cloudUser.approvedGrades.isNotEmpty()) cloudUser.approvedGrades else currentLogged.approvedGrades,
+              approvedGrades = if (cloudUser.approvedGrades.isNotEmpty()) cloudUser.approvedGrades else local.approvedGrades,
               boundDeviceId = cloudUser.boundDeviceId,
               boundDeviceName = cloudUser.boundDeviceName,
               boundDate = cloudUser.boundDate
             )
-            if (updatedLogged != currentLogged) {
-              loggedInUser = updatedLogged
+            if (updated != local) {
+              registeredUsers[existingIndex] = updated
             }
+            if (loggedInUser?.usernameOrPhone?.trim()?.equals(cloudUser.usernameOrPhone.trim(), ignoreCase = true) == true) {
+              val currentLogged = loggedInUser!!
+              val updatedLogged = currentLogged.copy(
+                isApproved = cloudUser.isApproved,
+                approvalTimestamp = cloudUser.approvalTimestamp,
+                paymentStatus = cloudUser.paymentStatus,
+                approvedGrades = if (cloudUser.approvedGrades.isNotEmpty()) cloudUser.approvedGrades else currentLogged.approvedGrades,
+                boundDeviceId = cloudUser.boundDeviceId,
+                boundDeviceName = cloudUser.boundDeviceName,
+                boundDate = cloudUser.boundDate
+              )
+              if (updatedLogged != currentLogged) {
+                loggedInUser = updatedLogged
+              }
+            }
+          } else {
+            // Add new user from cloud
+            registeredUsers.add(cloudUser)
           }
-        } else {
-          // Add new user from cloud
-          registeredUsers.add(cloudUser)
         }
+        saveUsersToPreferences(context, registeredUsers.toList())
       }
-      saveUsersToPreferences(context, registeredUsers.toList())
+    } catch (e: Throwable) {
+      Log.w("CloudSync", "Cloud sync observer inactive on this launch: ${e.localizedMessage}")
     }
   }
 
@@ -964,31 +974,45 @@ fun StudentPortalApp() {
   val isApprovedUser = isAdminAuthenticated || (loggedInUser != null && loggedInUser?.isApproved == true && !isApprovalExpiredForLoggedInUser)
 
   // 24-Hour 100% Free Trial for all Features & Grades from Initial Install Timestamp
-  // Robustly persistent across app uninstall & re-download
-  var isTrialActiveState by remember { mutableStateOf(PersistentTrialSecurityManager.isTrialActive(context)) }
-  var remainingTrialHours by remember { mutableStateOf(PersistentTrialSecurityManager.getRemainingHoursMinutes(context).first) }
-  var remainingTrialMinutes by remember { mutableStateOf(PersistentTrialSecurityManager.getRemainingHoursMinutes(context).second) }
+  // Robustly persistent across app uninstall & re-download (offloaded to IO to prevent splash screen UI stall)
+  var isTrialActiveState by remember { mutableStateOf(true) }
+  var remainingTrialHours by remember { mutableStateOf(24) }
+  var remainingTrialMinutes by remember { mutableStateOf(0) }
 
-  // Active real-time timer ticker (ticks every 2 seconds for 100% accuracy)
+  // Active real-time timer ticker on Dispatchers.IO (ticks every 2 seconds without blocking UI thread)
   LaunchedEffect(Unit) {
     while (true) {
+      try {
+        val (active, hm) = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+          val isActive = PersistentTrialSecurityManager.isTrialActive(context)
+          val remaining = PersistentTrialSecurityManager.getRemainingHoursMinutes(context)
+          Pair(isActive, remaining)
+        }
+        isTrialActiveState = active
+        remainingTrialHours = hm.first
+        remainingTrialMinutes = hm.second
+      } catch (_: Throwable) {}
       kotlinx.coroutines.delay(2000L)
-      isTrialActiveState = PersistentTrialSecurityManager.isTrialActive(context)
-      val (h, m) = PersistentTrialSecurityManager.getRemainingHoursMinutes(context)
-      remainingTrialHours = h
-      remainingTrialMinutes = m
     }
   }
 
   val isFeatureTrialActive = isTrialActiveState
 
-  // Real-time VPN & Proxy detection polling (100% blocks access when VPN is active)
-  var isVpnDetected by remember { mutableStateOf(AppSecurityManager.isVpnConnected(context)) }
-  var isTimeTamperedDetected by remember { mutableStateOf(AppSecurityManager.isTimeTampered(context)) }
+  // Real-time VPN & Proxy detection polling on Dispatchers.IO
+  var isVpnDetected by remember { mutableStateOf(false) }
+  var isTimeTamperedDetected by remember { mutableStateOf(false) }
   LaunchedEffect(Unit) {
     while (true) {
-      isVpnDetected = AppSecurityManager.isVpnConnected(context)
-      isTimeTamperedDetected = AppSecurityManager.isTimeTampered(context)
+      try {
+        val (vpn, tampered) = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+          Pair(
+            AppSecurityManager.isVpnConnected(context),
+            AppSecurityManager.isTimeTampered(context)
+          )
+        }
+        isVpnDetected = vpn
+        isTimeTamperedDetected = tampered
+      } catch (_: Throwable) {}
       kotlinx.coroutines.delay(2000L)
     }
   }
