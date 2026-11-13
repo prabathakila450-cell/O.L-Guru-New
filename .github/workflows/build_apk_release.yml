@@ -50,12 +50,15 @@ jobs:
             sudo mkdir -p "$SDK_ROOT/licenses"
             yes | sudo "$SDKMANAGER" --sdk_root="$SDK_ROOT" --licenses > /dev/null || true
             sudo "$SDKMANAGER" --sdk_root="$SDK_ROOT" "platform-tools" "platforms;android-35" "build-tools;36.0.0"
+            sudo chmod -R a+rX "$SDK_ROOT/licenses" "$SDK_ROOT/platforms" "$SDK_ROOT/build-tools" 2>/dev/null || true
           else
             echo "sdkmanager not found under $SDK_ROOT, relying on preinstalled SDK"
           fi
 
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v4
+        with:
+          cache-disabled: true
 
       - name: Prepare Environment & Debug Keystore
         run: |
@@ -72,15 +75,23 @@ jobs:
 
       - name: Build Debug APK with Gradle
         run: |
+          export ANDROID_SDK_ROOT="${ANDROID_SDK_ROOT:-/usr/local/lib/android/sdk}"
+          export ANDROID_HOME="${ANDROID_HOME:-$ANDROID_SDK_ROOT}"
           set -o pipefail
-          if ! ./gradlew :app:assembleDebug -x test -x lint -x check --no-daemon --max-workers=1 --stacktrace 2>&1 | tee gradle_build.log; then
-            echo "================ GRADLE FAILURE SUMMARY ================"
-            grep -A 40 "FAILURE: Build failed with an exception." gradle_build.log || tail -n 80 gradle_build.log
-            echo "==================== CAUSED BY ===================="
-            grep -A 15 "Caused by:" gradle_build.log | tail -n 45 || true
-            echo "==================================================="
+          if ! ./gradlew :app:assembleDebug -x test -x lint -x check --no-daemon --no-build-cache --max-workers=1 --stacktrace 2>&1 | tee gradle_build.log; then
+            echo "================ EXACT ERROR MESSAGE ================"
+            grep -vE '^[[:space:]]*(at |\.\.\. [0-9]+ more)' gradle_build.log | tail -n 30
+            echo "====================================================="
             exit 1
           fi
+
+      - name: Upload Gradle Failure Log
+        uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: gradle-failure-log
+          path: gradle_build.log
+          if-no-files-found: ignore
 
       - name: Verify APK Output
         run: |
