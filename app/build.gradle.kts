@@ -10,7 +10,5 @@ android {
         versionCode = 3
         versionName = "1.2"
         multiDexEnabled = true
-        vectorDrawables.useSupportLibrary = true
-        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 }
