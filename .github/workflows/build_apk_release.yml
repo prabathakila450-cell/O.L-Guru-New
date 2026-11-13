@@ -81,10 +81,10 @@ jobs:
           export ANDROID_HOME="${ANDROID_HOME:-$ANDROID_SDK_ROOT}"
           set -o pipefail
           if ! ./gradlew :app:assembleDebug -x test -x lint -x check --no-daemon --no-build-cache --max-workers=1 --stacktrace 2>&1 | tee gradle_build.log; then
-            echo "================ COMPILER / BUILD ERRORS ================"
-            grep -E '^(e: |ERROR:|FAILURE:|> Task .* FAILED|\* What went wrong:|Caused by:|Execution failed)' gradle_build.log | head -n 60 || true
             echo "================ EXACT ERROR SUMMARY ===================="
-            grep -vE '^[[:space:]]*(at |\.\.\. [0-9]+ more)' gradle_build.log | tail -n 25 || true
+            grep -vE '^[[:space:]]*(at |\.\.\. [0-9]+ more)' gradle_build.log | tail -n 15 || true
+            echo "================ COMPILER / BUILD ERRORS ================"
+            grep -iE -A 2 '^(e: |.*OutOfMemory|.*StackOverflow|ERROR:|FAILURE:|> Task .* FAILED)' gradle_build.log | tail -n 30 || true
             echo "========================================================="
             exit 1
           fi
