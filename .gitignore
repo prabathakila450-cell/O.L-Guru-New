@@ -16,3 +16,15 @@
 local.properties
 .env
 debug.keystore
+**/build/
+*.apk
+*.aab
+*.ap_
+*.log
+gradle_build.log
+hs_err_pid*.log
+*.hprof
+/public/
+/.build-outputs/
+/.aistudio/
+/assets/

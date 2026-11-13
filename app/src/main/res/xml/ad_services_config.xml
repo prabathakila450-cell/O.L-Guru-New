@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <ad-services-config xmlns:android="http://schemas.android.com/apk/res/android">
-    <topics allowAllToAccess="true" />
-    <custom-audiences allowAllToAccess="true" />
-    <attribution allowAllToAccess="true" />
+    <topics allowAllToAccess="false" />
+    <custom-audiences allowAllToAccess="false" />
+    <attribution allowAllToAccess="false" />
 </ad-services-config>

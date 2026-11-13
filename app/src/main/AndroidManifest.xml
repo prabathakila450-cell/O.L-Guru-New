@@ -6,6 +6,10 @@
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
+    <uses-permission android:name="android.permission.ACCESS_ADSERVICES_ATTRIBUTION" tools:node="remove" />
+    <uses-permission android:name="android.permission.ACCESS_ADSERVICES_TOPICS" tools:node="remove" />
+    <uses-permission android:name="android.permission.ACCESS_ADSERVICES_CUSTOM_AUDIENCE" tools:node="remove" />
+    <uses-permission android:name="android.permission.ACCESS_ADSERVICES_AD_ID" tools:node="remove" />
 
     <queries>
         <package android:name="com.whatsapp" />
@@ -38,11 +42,10 @@
             android:name="com.google.android.gms.ads.APPLICATION_ID"
             android:value="ca-app-pub-1910884216968569~6629833939" />
 
-        <!-- Privacy Sandbox Ad Services configuration -->
+        <!-- Remove Privacy Sandbox Ad Services configuration to prevent MEASUREMENT_SERVICE binding errors -->
         <property
             android:name="android.adservices.AD_SERVICES_CONFIG"
-            android:resource="@xml/ad_services_config"
-            tools:replace="android:resource" />
+            tools:node="remove" />
 
         <!-- Disable AdServices measurement binding when service is unavailable -->
         <meta-data

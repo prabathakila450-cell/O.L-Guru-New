@@ -200,6 +200,7 @@ import com.example.ui.theme.NeutralMedium
 import com.example.ui.theme.SurfaceVariantLight
 
 import com.google.firebase.firestore.IgnoreExtraProperties
+import com.google.firebase.firestore.PropertyName
 
 @IgnoreExtraProperties
 data class UserAccount(
@@ -207,6 +208,7 @@ data class UserAccount(
   val fullName: String = "",
   val usernameOrPhone: String = "",
   val password: String = "",
+  @get:PropertyName("isApproved") @set:PropertyName("isApproved")
   var isApproved: Boolean = false,
   val registerDate: String = "2026-08-11",
   var slipImageUri: String? = null,
@@ -724,14 +726,34 @@ fun StudentPortalApp() {
           it.usernameOrPhone.trim().equals(cloudUser.usernameOrPhone.trim(), ignoreCase = true) 
         }
         if (existingIndex >= 0) {
-          // Cloud data takes precedence for approval status
+          // Cloud data takes precedence for approval status, grades, and device binding
           val local = registeredUsers[existingIndex]
-          if (local.isApproved != cloudUser.isApproved || local.approvalTimestamp != cloudUser.approvalTimestamp) {
-            registeredUsers[existingIndex] = local.copy(
+          val updated = local.copy(
+            isApproved = cloudUser.isApproved,
+            approvalTimestamp = cloudUser.approvalTimestamp,
+            paymentStatus = cloudUser.paymentStatus,
+            approvedGrades = if (cloudUser.approvedGrades.isNotEmpty()) cloudUser.approvedGrades else local.approvedGrades,
+            boundDeviceId = cloudUser.boundDeviceId,
+            boundDeviceName = cloudUser.boundDeviceName,
+            boundDate = cloudUser.boundDate
+          )
+          if (updated != local) {
+            registeredUsers[existingIndex] = updated
+          }
+          if (loggedInUser?.usernameOrPhone?.trim()?.equals(cloudUser.usernameOrPhone.trim(), ignoreCase = true) == true) {
+            val currentLogged = loggedInUser!!
+            val updatedLogged = currentLogged.copy(
               isApproved = cloudUser.isApproved,
               approvalTimestamp = cloudUser.approvalTimestamp,
-              paymentStatus = cloudUser.paymentStatus
+              paymentStatus = cloudUser.paymentStatus,
+              approvedGrades = if (cloudUser.approvedGrades.isNotEmpty()) cloudUser.approvedGrades else currentLogged.approvedGrades,
+              boundDeviceId = cloudUser.boundDeviceId,
+              boundDeviceName = cloudUser.boundDeviceName,
+              boundDate = cloudUser.boundDate
             )
+            if (updatedLogged != currentLogged) {
+              loggedInUser = updatedLogged
+            }
           }
         } else {
           // Add new user from cloud
@@ -742,11 +764,11 @@ fun StudentPortalApp() {
     }
   }
 
-  // Periodic Sync for logged-in user to ensure they are on cloud
+  // Ensure logged-in user exists on cloud without overwriting existing cloud approval state
   LaunchedEffect(loggedInUser) {
     loggedInUser?.let { user ->
       coroutineScope.launch {
-        CloudAuthManager.syncUserToCloud(context, user)
+        CloudAuthManager.syncUserIfMissing(context, user)
       }
     }
   }
@@ -5913,6 +5935,7 @@ fun ExpiredStudentsListDialog(
   onUsersUpdated: () -> Unit
 ) {
   val context = LocalContext.current
+  val coroutineScope = androidx.compose.runtime.rememberCoroutineScope()
   val expiredStudents = registeredUsers.filter { it.isApprovalExpired() && !isAuthorizedAdminUser(it.usernameOrPhone) }
 
   Dialog(
@@ -6168,6 +6191,9 @@ fun ExpiredStudentsListDialog(
                             )
                             registeredUsers[idx] = renewed
                             onUsersUpdated()
+                            coroutineScope.launch {
+                              CloudAuthManager.syncUserToCloud(context, renewed)
+                            }
                             Toast.makeText(context, "✅ ${student.fullName} හට මාස 6කට (රු. 1000) සාර්ථකව අලුත් කරන ලදී!", Toast.LENGTH_SHORT).show()
                           }
                         },
@@ -9604,11 +9630,20 @@ fun LoginAndApprovalDialog(
 
                 // Automatic Cloud Sync (Google Sign-In) before registration
                 if (com.google.firebase.Firebase.auth.currentUser == null) {
-                  onGoogleSignInClicked(context, androidx.credentials.CredentialManager.create(context), {
-                    performRegistration()
-                  }, { err ->
-                    Toast.makeText(context, "⚠️ Cloud Sync අසාර්ථකයි: $err. කරුණාකර නැවත උත්සාහ කරන්න.", Toast.LENGTH_LONG).show()
-                  }, coroutineScope)
+                  onGoogleSignInClicked(
+                    context = context,
+                    credentialManager = androidx.credentials.CredentialManager.create(context),
+                    onAuthSuccess = {
+                      performRegistration()
+                    },
+                    onAuthError = { err ->
+                      Toast.makeText(context, "⚠️ Cloud Sync අසාර්ථකයි: $err. කරුණාකර නැවත උත්සාහ කරන්න.", Toast.LENGTH_LONG).show()
+                    },
+                    scope = coroutineScope,
+                    onAuthCancelled = {
+                      Toast.makeText(context, "⚠️ ලියාපදිංචිය සඳහා Google ගිණුම තෝරා අවසර ලබාදෙන්න.", Toast.LENGTH_LONG).show()
+                    }
+                  )
                 } else {
                   performRegistration()
                 }
@@ -9898,7 +9933,7 @@ fun LoginAndApprovalDialog(
                                 if (idx != -1) {
                                   val gradesToAssign = getApprovedGradesForPackage(user.requestedGradePackage)
                                   val (cId, cName) = getDeviceIdentifier(context)
-                                  registeredUsers[idx] = user.copy(
+                                  val approvedUser = user.copy(
                                     isApproved = true,
                                     approvedGrades = gradesToAssign,
                                     paymentStatus = "Approved",
@@ -9906,7 +9941,11 @@ fun LoginAndApprovalDialog(
                                     boundDeviceId = user.boundDeviceId ?: cId,
                                     boundDeviceName = user.boundDeviceName ?: cName
                                   )
+                                  registeredUsers[idx] = approvedUser
                                   onUsersUpdated()
+                                  coroutineScope.launch {
+                                    CloudAuthManager.syncUserToCloud(context, approvedUser)
+                                  }
                                 }
                                 Toast.makeText(context, "${user.fullName} (${user.requestedGradePackage}) අනුමත කරන ලදී!", Toast.LENGTH_SHORT).show()
                               },
@@ -9921,6 +9960,9 @@ fun LoginAndApprovalDialog(
                               onClick = {
                                 registeredUsers.remove(user)
                                 onUsersUpdated()
+                                coroutineScope.launch {
+                                  CloudAuthManager.deleteUserFromCloud(context, user.usernameOrPhone)
+                                }
                                 Toast.makeText(context, "${user.fullName} ඉවත් කරන ලදී", Toast.LENGTH_SHORT).show()
                               }
                             ) {
@@ -9939,8 +9981,12 @@ fun LoginAndApprovalDialog(
                               onClick = {
                                 val idx = registeredUsers.indexOf(user)
                                 if (idx != -1) {
-                                  registeredUsers[idx] = user.copy(boundDeviceId = null, boundDeviceName = null)
+                                  val resetUser = user.copy(boundDeviceId = null, boundDeviceName = null)
+                                  registeredUsers[idx] = resetUser
                                   onUsersUpdated()
+                                  coroutineScope.launch {
+                                    CloudAuthManager.syncUserToCloud(context, resetUser)
+                                  }
                                   Toast.makeText(context, "${user.fullName} ගේ Device Lock එක Reset කරන ලදී!", Toast.LENGTH_SHORT).show()
                                 }
                               },
@@ -10026,8 +10072,12 @@ fun LoginAndApprovalDialog(
                               onClick = {
                                 val idx = registeredUsers.indexOf(user)
                                 if (idx != -1) {
-                                  registeredUsers[idx] = user.copy(boundDeviceId = null, boundDeviceName = null)
+                                  val resetUser = user.copy(boundDeviceId = null, boundDeviceName = null)
+                                  registeredUsers[idx] = resetUser
                                   onUsersUpdated()
+                                  coroutineScope.launch {
+                                    CloudAuthManager.syncUserToCloud(context, resetUser)
+                                  }
                                   Toast.makeText(context, "${user.fullName} ගේ Device Lock එක Reset කරන ලදී!", Toast.LENGTH_SHORT).show()
                                 }
                               },
@@ -10045,8 +10095,12 @@ fun LoginAndApprovalDialog(
                             onClick = {
                               val idx = registeredUsers.indexOf(user)
                               if (idx != -1) {
-                                registeredUsers[idx] = user.copy(isApproved = false)
+                                val revokedUser = user.copy(isApproved = false, paymentStatus = "Revoked")
+                                registeredUsers[idx] = revokedUser
                                 onUsersUpdated()
+                                coroutineScope.launch {
+                                  CloudAuthManager.syncUserToCloud(context, revokedUser)
+                                }
                               }
                               Toast.makeText(context, "${user.fullName} අනුමැතිය අවලංගු කරන ලදී", Toast.LENGTH_SHORT).show()
                             }
@@ -10076,8 +10130,12 @@ fun LoginAndApprovalDialog(
                                 } else {
                                   currentList.add(gradeNum)
                                 }
-                                registeredUsers[idx] = user.copy(approvedGrades = currentList)
+                                val updatedUser = user.copy(approvedGrades = currentList)
+                                registeredUsers[idx] = updatedUser
                                 onUsersUpdated()
+                                coroutineScope.launch {
+                                  CloudAuthManager.syncUserToCloud(context, updatedUser)
+                                }
                               }
                             },
                             shape = RoundedCornerShape(6.dp),
@@ -10108,8 +10166,12 @@ fun LoginAndApprovalDialog(
                           onClick = {
                             val idx = registeredUsers.indexOf(user)
                             if (idx != -1) {
-                              registeredUsers[idx] = user.copy(approvedGrades = listOf("10", "11"))
+                              val comboUser = user.copy(approvedGrades = listOf("10", "11"))
+                              registeredUsers[idx] = comboUser
                               onUsersUpdated()
+                              coroutineScope.launch {
+                                CloudAuthManager.syncUserToCloud(context, comboUser)
+                              }
                               Toast.makeText(context, "${user.fullName} හට 10 සහ 11 ශ්‍රේණි (O/L) ලබාදුනි", Toast.LENGTH_SHORT).show()
                             }
                           },
@@ -10394,12 +10456,15 @@ fun LoginAndApprovalDialog(
           Button(
             onClick = {
               val (cId, cName) = getDeviceIdentifier(context)
-              val unlockedUser = lockedUser.copy(boundDeviceId = cId, boundDeviceName = cName, isApproved = true)
+              val unlockedUser = lockedUser.copy(boundDeviceId = cId, boundDeviceName = cName, isApproved = lockedUser.isApproved)
               val idx = registeredUsers.indexOf(lockedUser)
               if (idx >= 0) {
                 registeredUsers[idx] = unlockedUser
               }
               onLoginSuccess(unlockedUser)
+              coroutineScope.launch {
+                CloudAuthManager.syncUserToCloud(context, unlockedUser)
+              }
               deviceLockedUserForAlert = null
               Toast.makeText(context, "📱 ගිණුම සාර්ථකව මෙම උපාංගයට සම්බන්ධ විය!", Toast.LENGTH_SHORT).show()
             },

@@ -2,10 +2,8 @@ package com.example
 
 import android.content.Context
 import android.util.Log
-import com.google.firebase.Firebase
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.FirebaseFirestoreSettings
-import com.google.firebase.firestore.firestore
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
@@ -34,16 +32,54 @@ object CloudAuthManager {
         return db
     }
 
+    private fun buildDocId(usernameOrPhone: String): String {
+        return usernameOrPhone.trim().lowercase().replace("+", "").replace(" ", "")
+    }
+
     suspend fun syncUserToCloud(context: Context, user: UserAccount) {
         try {
             val db = getFirestore(context)
-            val docId = user.usernameOrPhone.trim().lowercase().replace("+", "").replace(" ", "")
+            val docId = buildDocId(user.usernameOrPhone)
             if (docId.isBlank()) return
-            
+
             db.collection(COLLECTION_USERS).document(docId).set(user).await()
-            Log.d(TAG, "User synced to cloud: $docId")
+            Log.d(TAG, "User synced to cloud: $docId (isApproved=${user.isApproved})")
         } catch (e: Exception) {
             Log.e(TAG, "Error syncing user to cloud", e)
+        }
+    }
+
+    /**
+     * Only uploads the user record if the document does not already exist in Firestore.
+     * Prevents stale local state (e.g. isApproved = false) from overwriting an Admin's cloud approval.
+     */
+    suspend fun syncUserIfMissing(context: Context, user: UserAccount) {
+        try {
+            val db = getFirestore(context)
+            val docId = buildDocId(user.usernameOrPhone)
+            if (docId.isBlank()) return
+
+            val docRef = db.collection(COLLECTION_USERS).document(docId)
+            val snapshot = docRef.get().await()
+            if (!snapshot.exists()) {
+                docRef.set(user).await()
+                Log.d(TAG, "Missing user uploaded to cloud: $docId")
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Error checking/syncing missing user to cloud", e)
+        }
+    }
+
+    suspend fun deleteUserFromCloud(context: Context, usernameOrPhone: String) {
+        try {
+            val db = getFirestore(context)
+            val docId = buildDocId(usernameOrPhone)
+            if (docId.isBlank()) return
+
+            db.collection(COLLECTION_USERS).document(docId).delete().await()
+            Log.d(TAG, "User deleted from cloud: $docId")
+        } catch (e: Exception) {
+            Log.e(TAG, "Error deleting user from cloud", e)
         }
     }
 
@@ -55,7 +91,11 @@ object CloudAuthManager {
                     Log.e(TAG, "Error observing users", error)
                     return@addSnapshotListener
                 }
-                val users = snapshot?.documents?.mapNotNull { it.toObject(UserAccount::class.java) } ?: emptyList()
+                val users = snapshot?.documents?.mapNotNull { doc ->
+                    val parsed = doc.toObject(UserAccount::class.java) ?: return@mapNotNull null
+                    val rawApproved = doc.getBoolean("isApproved") ?: doc.getBoolean("approved") ?: parsed.isApproved
+                    parsed.copy(isApproved = rawApproved)
+                } ?: emptyList()
                 trySend(users)
             }
         awaitClose { listener.remove() }
@@ -64,7 +104,8 @@ object CloudAuthManager {
     suspend fun updateUserApproval(context: Context, usernameOrPhone: String, isApproved: Boolean, timestamp: Long?) {
         try {
             val db = getFirestore(context)
-            val docId = usernameOrPhone.trim().lowercase().replace("+", "").replace(" ", "")
+            val docId = buildDocId(usernameOrPhone)
+            if (docId.isBlank()) return
             db.collection(COLLECTION_USERS).document(docId).update(
                 mapOf(
                     "isApproved" to isApproved,
