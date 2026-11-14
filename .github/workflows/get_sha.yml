@@ -1,6 +1,6 @@
 name: Get SHA-1 Fingerprint
 
-on: [push, workflow_dispatch]
+on: [workflow_dispatch]
 
 jobs:
   get-sha:
@@ -13,12 +13,10 @@ jobs:
         uses: actions/setup-java@v4
         with:
           distribution: 'temurin'
-          java-version: '21'
+          java-version: '17'
 
-      - name: Decode Keystore
-        run: |
-          echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 --decode > my-upload-key.jks
+      - name: Grant execute permission for gradlew
+        run: chmod +x gradlew
 
-      - name: Get SHA-1
-        run: |
-          keytool -list -v -keystore my-upload-key.jks -alias upload -storepass "${{ secrets.KEYSTORE_PASSWORD }}"
+      - name: Run Signing Report
+        run: ./gradlew signingReport
