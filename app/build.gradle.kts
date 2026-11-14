@@ -10,12 +10,12 @@ plugins {
 }
 
 android {
-  namespace = "com.example"
+  namespace = "com.aistudio.studentportal.slnotes"
   compileSdk = 35
   buildToolsVersion = "36.0.0"
 
   defaultConfig {
-    applicationId = "com.aistudio.studentportal.slnotes.mqvsiz"
+    applicationId = "com.aistudio.studentportal.slnotes"
     minSdk = 21
     targetSdk = 35
     versionCode = 3
