@@ -24,6 +24,12 @@ jobs:
           flutter-version: '3.x'
           cache: true
 
+      # මෙම කොටසින් ස්වයංක්‍රීයව android ෆෝල්ඩරය නිවැරදිව සකසා ගනී
+      - name: Organize Android Structure
+        run: |
+          mkdir -p android
+          mv app gradle build.gradle.kts settings.gradle.kts gradle.properties gradlew gradlew.bat android/ 2>/dev/null || true
+
       - name: Install Dependencies
         run: flutter pub get
 
