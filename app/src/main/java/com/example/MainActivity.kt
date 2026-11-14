@@ -135,10 +135,15 @@ import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.OutlinedTextFieldDefaults
+import android.content.ContextWrapper
+import android.content.MutableContextWrapper
 import androidx.credentials.CredentialManager
 import androidx.credentials.CustomCredential
 import androidx.credentials.GetCredentialRequest
 import androidx.credentials.exceptions.GetCredentialCancellationException
+import androidx.credentials.exceptions.GetCredentialException
+import androidx.lifecycle.lifecycleScope
+import com.google.android.libraries.identity.googleid.GetGoogleIdOption
 import com.google.android.libraries.identity.googleid.GetSignInWithGoogleOption
 import com.google.android.libraries.identity.googleid.GoogleIdTokenCredential
 import com.google.android.libraries.identity.googleid.GoogleIdTokenCredential.Companion.TYPE_GOOGLE_ID_TOKEN_CREDENTIAL
@@ -595,40 +600,57 @@ fun openPdfFile(context: Context, pdfUriString: String?) {
   }
 }
 
-fun onGoogleSignInClicked(
+tailrec fun Context.findActivity(): ComponentActivity? = when (this) {
+  is ComponentActivity -> this
+  is ContextWrapper -> baseContext.findActivity()
+  else -> null
+}
+
+fun attemptAutoSignIn(
   context: Context,
   credentialManager: CredentialManager,
-  onAuthSuccess: () -> Unit,
-  onAuthError: (String) -> Unit,
-  scope: kotlinx.coroutines.CoroutineScope,
-  onAuthCancelled: () -> Unit = {}
+  onAuthSuccess: () -> Unit = {},
+  onUnauthenticated: () -> Unit = {},
+  scope: kotlinx.coroutines.CoroutineScope
 ) {
-  @SuppressLint("DiscouragedApi")
-  val clientIdResId = context.resources.getIdentifier(
-    "default_web_client_id",
-    "string",
-    context.packageName
-  )
-  val clientId = if (clientIdResId != 0) {
-    try {
-      context.getString(clientIdResId)
-    } catch (_: Exception) {
-      ""
+  try {
+    if (com.google.firebase.FirebaseApp.getApps(context).isEmpty()) {
+      onUnauthenticated()
+      return
     }
-  } else {
-    ""
-  }
-  if (clientId.isBlank()) {
-    onAuthError("Google Sign-In configuration missing: default_web_client_id not found")
+    if (com.google.firebase.Firebase.auth.currentUser != null) {
+      onAuthSuccess()
+      return
+    }
+  } catch (_: Throwable) {
+    onUnauthenticated()
     return
   }
 
-  val signInOption = GetSignInWithGoogleOption.Builder(serverClientId = clientId).build()
-  val request = GetCredentialRequest.Builder().addCredentialOption(signInOption).build()
+  val clientId = try {
+    context.getString(R.string.default_web_client_id)
+  } catch (_: Exception) {
+    onUnauthenticated()
+    return
+  }
+  if (clientId.isBlank()) {
+    onUnauthenticated()
+    return
+  }
 
-  scope.launch {
+  val googleIdOption = GetGoogleIdOption.Builder()
+    .setFilterByAuthorizedAccounts(true)
+    .setServerClientId(clientId)
+    .setAutoSelectEnabled(true)
+    .build()
+  val request = GetCredentialRequest.Builder().addCredentialOption(googleIdOption).build()
+  val activity = context.findActivity()
+  val uiContext: Context = if (activity != null) MutableContextWrapper(activity) else context
+  val launchScope = activity?.lifecycleScope ?: scope
+
+  launchScope.launch {
     try {
-      val result = credentialManager.getCredential(context as Activity, request)
+      val result = credentialManager.getCredential(uiContext, request)
       val credential = result.credential
       if (credential is CustomCredential && credential.type == TYPE_GOOGLE_ID_TOKEN_CREDENTIAL) {
         val googleIdToken = GoogleIdTokenCredential.createFrom(credential.data).idToken
@@ -636,11 +658,84 @@ fun onGoogleSignInClicked(
         com.google.firebase.Firebase.auth.signInWithCredential(authCredential).await()
         onAuthSuccess()
       } else {
+        onUnauthenticated()
+      }
+    } catch (_: Exception) {
+      onUnauthenticated()
+    }
+  }
+}
+
+fun onGoogleSignInClicked(
+  context: Context,
+  credentialManager: CredentialManager,
+  onAuthSuccess: () -> Unit,
+  onAuthError: (String) -> Unit,
+  scope: kotlinx.coroutines.CoroutineScope,
+  onAuthCancelled: (String?) -> Unit = {}
+) {
+  val clientId = try {
+    context.getString(R.string.default_web_client_id)
+  } catch (_: Exception) {
+    ""
+  }
+  if (clientId.isBlank()) {
+    onAuthError("Google Sign-In configuration missing: default_web_client_id not found")
+    return
+  }
+
+  val activity = context.findActivity()
+  val uiContext: Context = if (activity != null) MutableContextWrapper(activity) else context
+  val launchScope = activity?.lifecycleScope ?: scope
+
+  suspend fun signInWithOption(request: GetCredentialRequest): Boolean {
+    val result = credentialManager.getCredential(uiContext, request)
+    val credential = result.credential
+    if (credential is CustomCredential && credential.type == TYPE_GOOGLE_ID_TOKEN_CREDENTIAL) {
+      val googleIdToken = GoogleIdTokenCredential.createFrom(credential.data).idToken
+      val authCredential = GoogleAuthProvider.getCredential(googleIdToken, null)
+      com.google.firebase.Firebase.auth.signInWithCredential(authCredential).await()
+      return true
+    }
+    return false
+  }
+
+  launchScope.launch {
+    try {
+      val signInOption = GetSignInWithGoogleOption.Builder(serverClientId = clientId).build()
+      val primaryRequest = GetCredentialRequest.Builder().addCredentialOption(signInOption).build()
+      if (signInWithOption(primaryRequest)) {
+        onAuthSuccess()
+      } else {
         onAuthError("Unexpected credential type")
       }
-    } catch (e: GetCredentialCancellationException) {
-      Log.w("Auth", "Google Sign-In flow cancelled or dismissed: ${e.message}", e)
-      onAuthCancelled()
+    } catch (primaryEx: GetCredentialException) {
+      Log.w("Auth", "Primary GetSignInWithGoogleOption failed (${primaryEx::class.java.simpleName}): ${primaryEx.errorMessage ?: primaryEx.message}", primaryEx)
+      // Fallback to single-option GetGoogleIdOption (bypasses MIUI/Android consent activity cancellation)
+      try {
+        val fallbackOption = GetGoogleIdOption.Builder()
+          .setFilterByAuthorizedAccounts(false)
+          .setServerClientId(clientId)
+          .setAutoSelectEnabled(false)
+          .build()
+        val fallbackRequest = GetCredentialRequest.Builder().addCredentialOption(fallbackOption).build()
+        if (signInWithOption(fallbackRequest)) {
+          onAuthSuccess()
+        } else {
+          onAuthError("Unexpected credential type")
+        }
+      } catch (cancelEx: GetCredentialCancellationException) {
+        val detail = cancelEx.errorMessage?.toString() ?: cancelEx.message
+        Log.w("Auth", "Google Sign-In fallback cancelled: $detail", cancelEx)
+        onAuthCancelled(detail)
+      } catch (fallbackEx: GetCredentialException) {
+        val detail = fallbackEx.errorMessage?.toString() ?: fallbackEx.localizedMessage ?: "Sign in failed"
+        Log.e("Auth", "Google Sign-In fallback failed: $detail", fallbackEx)
+        onAuthError(detail)
+      } catch (e: Exception) {
+        Log.e("Auth", "Google Sign-In fallback Firebase auth failed", e)
+        onAuthError(e.localizedMessage ?: "Sign in failed")
+      }
     } catch (e: Exception) {
       Log.e("Auth", "Google Sign-In failed", e)
       onAuthError(e.localizedMessage ?: "Sign in failed")
@@ -795,6 +890,13 @@ fun StudentPortalApp() {
 
   // Cloud Sync: Observe users from Firestore and merge with local state
   val coroutineScope = androidx.compose.runtime.rememberCoroutineScope()
+  LaunchedEffect(Unit) {
+    attemptAutoSignIn(
+      context = context,
+      credentialManager = CredentialManager.create(context),
+      scope = coroutineScope
+    )
+  }
   // Helper to merge a fetched/observed Cloud Firestore user snapshot into local state
   fun mergeCloudUsersSnapshot(cloudUsers: List<UserAccount>) {
     val (currDevId, currDevName) = getDeviceIdentifier(context)
@@ -9401,6 +9503,17 @@ fun LoginAndApprovalDialog(
   var regSlipName by remember { mutableStateOf<String?>(null) }
   var isSubmittingRequest by remember { mutableStateOf(false) }
   var isCheckingCloudStatus by remember { mutableStateOf(false) }
+  var signedInGoogleEmail by remember {
+    mutableStateOf(
+      try {
+        com.google.firebase.Firebase.auth.currentUser?.email
+      } catch (_: Throwable) {
+        null
+      }
+    )
+  }
+  var isGoogleSigningIn by remember { mutableStateOf(false) }
+  var googleSignInErrorMsg by remember { mutableStateOf<String?>(null) }
 
   val regSlipPickerLauncher = rememberLauncherForActivityResult(
     contract = ActivityResultContracts.GetContent()
@@ -9943,11 +10056,106 @@ fun LoginAndApprovalDialog(
               }
             }
 
-            Spacer(modifier = Modifier.height(18.dp))
+            Spacer(modifier = Modifier.height(14.dp))
+
+            // Dedicated Google Account Verification Status / Interactive Sign-In Card
+            val isGoogleReadyNow = signedInGoogleEmail != null || try {
+              com.google.firebase.Firebase.auth.currentUser != null
+            } catch (_: Throwable) {
+              false
+            }
+            if (isGoogleReadyNow) {
+              Surface(
+                shape = RoundedCornerShape(10.dp),
+                color = Color(0xFFECFDF5),
+                border = BorderStroke(1.dp, Color(0xFF10B981)),
+                modifier = Modifier.fillMaxWidth().padding(bottom = 10.dp)
+              ) {
+                Row(
+                  modifier = Modifier.padding(horizontal = 10.dp, vertical = 8.dp),
+                  verticalAlignment = Alignment.CenterVertically
+                ) {
+                  Icon(Icons.Default.Verified, contentDescription = "Google Verified", tint = Color(0xFF059669), modifier = Modifier.size(18.dp))
+                  Spacer(modifier = Modifier.width(8.dp))
+                  Text(
+                    text = "✅ Google ගිණුම සම්බන්ධයි: ${signedInGoogleEmail ?: "Verified"}",
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = Color(0xFF065F46),
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                  )
+                }
+              }
+            } else {
+              OutlinedButton(
+                onClick = {
+                  if (!isGoogleSigningIn && !isSubmittingRequest) {
+                    isGoogleSigningIn = true
+                    googleSignInErrorMsg = null
+                    onGoogleSignInClicked(
+                      context = context,
+                      credentialManager = CredentialManager.create(context),
+                      onAuthSuccess = {
+                        isGoogleSigningIn = false
+                        signedInGoogleEmail = try {
+                          com.google.firebase.Firebase.auth.currentUser?.email ?: "Connected"
+                        } catch (_: Throwable) {
+                          "Connected"
+                        }
+                        googleSignInErrorMsg = null
+                        Toast.makeText(context, "✅ Google ගිණුම සාර්ථකව සම්බන්ධ විය!", Toast.LENGTH_SHORT).show()
+                      },
+                      onAuthError = { err ->
+                        isGoogleSigningIn = false
+                        googleSignInErrorMsg = err
+                        Toast.makeText(context, "⚠️ Google Sign-In අසාර්ථකයි: $err", Toast.LENGTH_LONG).show()
+                      },
+                      scope = coroutineScope,
+                      onAuthCancelled = { detail ->
+                        isGoogleSigningIn = false
+                        val detailNote = if (!detail.isNullOrBlank()) " ($detail)" else ""
+                        googleSignInErrorMsg = "Google ගිණුම තෝරා අවසර ලබාදීම අවලංගු විය$detailNote"
+                        Toast.makeText(context, "⚠️ Google ගිණුම තෝරා අවසර ලබාදෙන්න$detailNote", Toast.LENGTH_LONG).show()
+                      }
+                    )
+                  }
+                },
+                enabled = !isGoogleSigningIn && !isSubmittingRequest,
+                shape = RoundedCornerShape(10.dp),
+                border = BorderStroke(1.2.dp, Color(0xFF2563EB)),
+                modifier = Modifier.fillMaxWidth().padding(bottom = 10.dp).height(44.dp).testTag("google_sign_in_button")
+              ) {
+                Icon(Icons.Default.AccountBox, contentDescription = "Sign in with Google", tint = Color(0xFF1D4ED8), modifier = Modifier.size(18.dp))
+                Spacer(modifier = Modifier.width(8.dp))
+                Text(
+                  text = if (isGoogleSigningIn) "Google සත්‍යාපනය වෙමින්..." else "Sign in with Google (ගිණුම තහවුරු කරන්න)",
+                  fontSize = 11.5.sp,
+                  fontWeight = FontWeight.Bold,
+                  color = Color(0xFF1D4ED8)
+                )
+              }
+            }
+
+            if (!googleSignInErrorMsg.isNullOrBlank()) {
+              Surface(
+                shape = RoundedCornerShape(8.dp),
+                color = Color(0xFFFEF2F2),
+                border = BorderStroke(1.dp, Color(0xFFFCA5A5)),
+                modifier = Modifier.fillMaxWidth().padding(bottom = 10.dp)
+              ) {
+                Text(
+                  text = "⚠️ ${googleSignInErrorMsg}",
+                  fontSize = 10.5.sp,
+                  color = Color(0xFF991B1B),
+                  modifier = Modifier.padding(8.dp)
+                )
+              }
+            }
 
             Button(
               onClick = {
-                if (isSubmittingRequest) return@Button
+                if (isSubmittingRequest || isGoogleSigningIn) return@Button
                 val (currDevId, currDevName) = getDeviceIdentifier(context)
                 val cleanPhone = regPhone.trim()
                 if (cleanPhone.isBlank()) {
@@ -10159,18 +10367,32 @@ fun LoginAndApprovalDialog(
                     false
                   }
                   if (!hasSignedInUser) {
+                    isGoogleSigningIn = true
+                    googleSignInErrorMsg = null
                     onGoogleSignInClicked(
                       context = context,
-                      credentialManager = androidx.credentials.CredentialManager.create(context),
+                      credentialManager = CredentialManager.create(context),
                       onAuthSuccess = {
+                        isGoogleSigningIn = false
+                        signedInGoogleEmail = try {
+                          com.google.firebase.Firebase.auth.currentUser?.email ?: "Connected"
+                        } catch (_: Throwable) {
+                          "Connected"
+                        }
+                        googleSignInErrorMsg = null
                         submitOrActivate()
                       },
                       onAuthError = { err ->
+                        isGoogleSigningIn = false
+                        googleSignInErrorMsg = err
                         Toast.makeText(context, "⚠️ Google Sign-In අසාර්ථකයි: $err", Toast.LENGTH_LONG).show()
                       },
                       scope = coroutineScope,
-                      onAuthCancelled = {
-                        Toast.makeText(context, "⚠️ ලියාපදිංචිය සඳහා Google ගිණුම තෝරා අවසර ලබාදෙන්න.", Toast.LENGTH_LONG).show()
+                      onAuthCancelled = { detail ->
+                        isGoogleSigningIn = false
+                        val detailNote = if (!detail.isNullOrBlank()) " ($detail)" else ""
+                        googleSignInErrorMsg = "Google ගිණුම තෝරා අවසර ලබාදීම අවලංගු විය$detailNote"
+                        Toast.makeText(context, "⚠️ ලියාපදිංචිය සඳහා Google ගිණුම තෝරා අවසර ලබාදෙන්න$detailNote", Toast.LENGTH_LONG).show()
                       }
                     )
                   } else {
@@ -10180,7 +10402,7 @@ fun LoginAndApprovalDialog(
                   submitOrActivate()
                 }
               },
-              enabled = !isSubmittingRequest,
+              enabled = !isSubmittingRequest && !isGoogleSigningIn,
               colors = ButtonDefaults.buttonColors(containerColor = if (isRenewalMode) Color(0xFFB91C1C) else Color(0xFF137333)),
               shape = RoundedCornerShape(12.dp),
               modifier = Modifier.fillMaxWidth().height(48.dp)
