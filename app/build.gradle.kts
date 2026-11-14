@@ -10,7 +10,7 @@ plugins {
 }
 
 android {
-  namespace = "com.aistudio.studentportal.slnotes"
+  namespace = "com.example"
   compileSdk = 35
   buildToolsVersion = "36.0.0"
 
