@@ -611,16 +611,7 @@ private const val DEFAULT_FIREBASE_WEB_CLIENT_ID = "616154457350-ors7kvk6l925c3m
 
 @SuppressLint("DiscouragedApi")
 private fun resolveDefaultWebClientId(context: Context): String {
-  // 1. Direct compile-time R.string.default_web_client_id generated from google-services.json
-  try {
-    val resId = R.string.default_web_client_id
-    if (resId != 0) {
-      val clientId = context.getString(resId)
-      if (clientId.isNotBlank()) return clientId
-    }
-  } catch (_: Throwable) {}
-
-  // 2. Lookup via namespace package "com.example"
+  // 1. Dynamic lookup via namespace package "com.example"
   try {
     val resId = context.resources.getIdentifier("default_web_client_id", "string", "com.example")
     if (resId != 0) {
