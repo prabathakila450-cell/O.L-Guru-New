@@ -1,0 +1,158 @@
+{
+  "project_info": {
+    "project_number": "616154457350",
+    "project_id": "edu-lk-app",
+    "storage_bucket": "edu-lk-app.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:616154457350:android:287b1eebd376cfeeb86a87",
+        "android_client_info": {
+          "package_name": "com.aistudio.studentportal.slnotes"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "616154457350-o7i9es8rnitlj9k0gtgn296caj2bbv9o.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.aistudio.studentportal.slnotes",
+            "certificate_hash": "375a048304543716c2f271d97a462adcc3ae04bd"
+          }
+        },
+        {
+          "client_id": "616154457350-ors7kvk6l925c3mgglviprlb9vvr5ijf.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBZ9fXOemT545iEn4rfVlciCHax2DBjCrk"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "616154457350-ors7kvk6l925c3mgglviprlb9vvr5ijf.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:616154457350:android:d29ca4a6c7faacefb86a87",
+        "android_client_info": {
+          "package_name": "com.aistudio.studentportal.slnotes.kssatd"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "616154457350-2lim5ql7404e6curu2gq8mlq8nvb76d0.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.aistudio.studentportal.slnotes.kssatd",
+            "certificate_hash": "f1b26fff896ffde546678f97f34b8a271002da42"
+          }
+        },
+        {
+          "client_id": "616154457350-ors7kvk6l925c3mgglviprlb9vvr5ijf.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBZ9fXOemT545iEn4rfVlciCHax2DBjCrk"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "616154457350-ors7kvk6l925c3mgglviprlb9vvr5ijf.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:616154457350:android:46a384d698d0dcc8b86a87",
+        "android_client_info": {
+          "package_name": "com.aistudio.studentportal.slnotes.mqvsiz"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "616154457350-2thqfdh2kc23kvi5qun0ur54ctjvue8e.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.aistudio.studentportal.slnotes.mqvsiz",
+            "certificate_hash": "9ddf6489cf84d22efde82b120cbb6083a4ed1e98"
+          }
+        },
+        {
+          "client_id": "616154457350-ors7kvk6l925c3mgglviprlb9vvr5ijf.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBZ9fXOemT545iEn4rfVlciCHax2DBjCrk"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "616154457350-ors7kvk6l925c3mgglviprlb9vvr5ijf.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:616154457350:android:2abd2658255bb05db86a87",
+        "android_client_info": {
+          "package_name": "com.aistudio.studentportal.slnotes.txgocr"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "616154457350-nrlb0n6l5su19m1cni3jv6g8rf5d6g2g.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.aistudio.studentportal.slnotes.txgocr",
+            "certificate_hash": "735a98c8a5a43cfdcf988840d39f5fa4222216eb"
+          }
+        },
+        {
+          "client_id": "616154457350-ors7kvk6l925c3mgglviprlb9vvr5ijf.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBZ9fXOemT545iEn4rfVlciCHax2DBjCrk"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "616154457350-ors7kvk6l925c3mgglviprlb9vvr5ijf.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
