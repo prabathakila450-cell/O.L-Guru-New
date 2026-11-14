@@ -106,6 +106,10 @@ object AppSecurityManager {
         || board.contains("cutf")
         || board.contains("goldfish")
         || board.contains("ranchu")
+        || product.contains("sdk_gphone")
+        || product.contains("sdk_google")
+        || product.contains("vbox")
+        || hardware.contains("qemu")
   }
 
   fun isScreenProtectionEnabled(context: Context): Boolean {
@@ -148,6 +152,12 @@ object AppSecurityManager {
   fun applyScreenProtection(activity: Activity, isEnabled: Boolean) {
     try {
       activity.runOnUiThread {
+        if (isDeviceEmulator()) {
+          // Cloud streaming emulator (AI Studio Preview) streams display frames to the browser.
+          // FLAG_SECURE on an emulator blacks out the entire browser preview stream.
+          activity.window.clearFlags(WindowManager.LayoutParams.FLAG_SECURE)
+          return@runOnUiThread
+        }
         // Non-admin users ALWAYS get FLAG_SECURE everywhere EXCEPT on a clean Home screen
         // (no sub-screens, modals, sheets, or study dialogs open). Admin retains full freedom.
         val enforceSecure = if (isAdminSession) isEnabled else !isCleanHomeScreenActive
@@ -214,7 +224,7 @@ object AppSecurityManager {
   }
 
   fun getSecureFlagPolicy(): androidx.compose.ui.window.SecureFlagPolicy {
-    return if (isAdminSession) {
+    return if (isAdminSession || isDeviceEmulator()) {
       androidx.compose.ui.window.SecureFlagPolicy.SecureOff
     } else {
       androidx.compose.ui.window.SecureFlagPolicy.SecureOn

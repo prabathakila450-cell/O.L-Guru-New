@@ -10,6 +10,12 @@
 -dontwarn com.facebook.infer.annotation.**
 -dontwarn com.facebook.ads.**
 
+# Google Identity & Jetpack Credential Manager
+-keep class androidx.credentials.** { *; }
+-keep class com.google.android.libraries.identity.googleid.** { *; }
+-dontwarn androidx.credentials.**
+-dontwarn com.google.android.libraries.identity.googleid.**
+
 
 # If your project uses WebView with JS, uncomment the following
 # and specify the fully qualified class name to the JavaScript interface
