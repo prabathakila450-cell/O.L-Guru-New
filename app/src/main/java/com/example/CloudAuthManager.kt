@@ -203,6 +203,7 @@ object CloudAuthManager {
                     .addSnapshotListener { snapshot, error ->
                         if (error != null) {
                             Log.e(TAG, "Error observing users", error)
+                            close(error)
                             return@addSnapshotListener
                         }
                         val users = snapshot?.documents?.mapNotNull { doc ->
@@ -213,7 +214,7 @@ object CloudAuthManager {
             }
         } catch (e: Throwable) {
             Log.e(TAG, "Failed to attach Firestore user observer", e)
-            close()
+            close(e)
         }
         awaitClose { listener?.remove() }
     }

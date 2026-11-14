@@ -795,107 +795,125 @@ fun StudentPortalApp() {
 
   // Cloud Sync: Observe users from Firestore and merge with local state
   val coroutineScope = androidx.compose.runtime.rememberCoroutineScope()
-  LaunchedEffect(Unit) {
-    try {
-      CloudAuthManager.observeAllUsers(context).collect { cloudUsers ->
-        val (currDevId, currDevName) = getDeviceIdentifier(context)
-        val savedPhone = getSavedLoggedInUserPhone(context)
-        cloudUsers.forEach { cloudUser ->
-          val normCloud = CloudAuthManager.normalizePhoneKey(cloudUser.usernameOrPhone)
-          val existingIndex = registeredUsers.indexOfFirst {
-            CloudAuthManager.normalizePhoneKey(it.usernameOrPhone) == normCloud
-          }
-          if (existingIndex >= 0) {
-            // Cloud data takes precedence for approval status, grades, and device binding
-            val local = registeredUsers[existingIndex]
-            val updated = local.copy(
-              fullName = cloudUser.fullName.ifBlank { local.fullName },
-              password = cloudUser.password.ifBlank { local.password },
-              isApproved = cloudUser.isApproved,
-              approvalTimestamp = cloudUser.approvalTimestamp,
-              paymentStatus = cloudUser.paymentStatus,
-              requestedGradePackage = cloudUser.requestedGradePackage.ifBlank { local.requestedGradePackage },
-              approvedGrades = if (cloudUser.approvedGrades.isNotEmpty()) cloudUser.approvedGrades else local.approvedGrades,
-              boundDeviceId = cloudUser.boundDeviceId,
-              boundDeviceName = cloudUser.boundDeviceName,
-              boundDate = cloudUser.boundDate,
-              slipImageUri = cloudUser.slipImageUri ?: local.slipImageUri,
-              requestDate = cloudUser.requestDate ?: local.requestDate,
-              requestTimestamp = cloudUser.requestTimestamp ?: local.requestTimestamp
-            )
-            if (updated != local) {
-              registeredUsers[existingIndex] = updated
-            }
-            if (loggedInUser != null && CloudAuthManager.normalizePhoneKey(loggedInUser!!.usernameOrPhone) == normCloud) {
-              val currentLogged = loggedInUser!!
-              val updatedLogged = currentLogged.copy(
-                fullName = cloudUser.fullName.ifBlank { currentLogged.fullName },
-                isApproved = cloudUser.isApproved,
-                approvalTimestamp = cloudUser.approvalTimestamp,
-                paymentStatus = cloudUser.paymentStatus,
-                requestedGradePackage = cloudUser.requestedGradePackage.ifBlank { currentLogged.requestedGradePackage },
-                approvedGrades = if (cloudUser.approvedGrades.isNotEmpty()) cloudUser.approvedGrades else currentLogged.approvedGrades,
-                boundDeviceId = cloudUser.boundDeviceId,
-                boundDeviceName = cloudUser.boundDeviceName,
-                boundDate = cloudUser.boundDate
-              )
-              if (updatedLogged != currentLogged) {
-                loggedInUser = updatedLogged
-                if (updatedLogged.isApproved && !currentLogged.isApproved && !updatedLogged.isApprovalExpired()) {
-                  saveLoggedInUserPhone(context, updatedLogged.usernameOrPhone)
-                  Toast.makeText(
-                    context,
-                    "🎉 ඇඩ්මින් විසින් ඔබගේ ගිණුම අනුමත කරන ලදී! සියලුම පහසුකම් දැන් විවෘතයි.",
-                    Toast.LENGTH_LONG
-                  ).show()
-                }
-              }
-            }
-          } else {
-            // Add new user from cloud
-            registeredUsers.add(cloudUser)
-          }
-
-          // Delayed auto-login or state sync if initial frame-0 launch finished before Firestore loaded
-          if (loggedInUser == null && !isAuthorizedAdminUser(cloudUser.usernameOrPhone)) {
-            val matchesSavedPhone = !savedPhone.isNullOrBlank() &&
-              CloudAuthManager.normalizePhoneKey(savedPhone) == normCloud &&
-              (cloudUser.boundDeviceId == null || cloudUser.boundDeviceId == currDevId)
-            val matchesBoundDevice = cloudUser.boundDeviceId == currDevId
-            if (matchesSavedPhone || matchesBoundDevice) {
-              val restored = cloudUser.copy(
-                boundDeviceId = cloudUser.boundDeviceId ?: currDevId,
-                boundDeviceName = cloudUser.boundDeviceName ?: currDevName
-              )
-              loggedInUser = restored
-              if (restored.isApproved && !restored.isApprovalExpired()) {
-                saveLoggedInUserPhone(context, restored.usernameOrPhone)
-                if (cloudUser.boundDeviceId == null) {
-                  coroutineScope.launch { CloudAuthManager.syncUserToCloud(context, restored) }
-                }
-              }
-            }
-          }
-        }
-        val boundStudentForDevice = cloudUsers.find {
-          !isAuthorizedAdminUser(it.usernameOrPhone) && it.boundDeviceId == currDevId
-        }
-        if (boundStudentForDevice != null) {
-          saveRegisteredDevicePhone(context, boundStudentForDevice.usernameOrPhone)
-        } else if (cloudUsers.isNotEmpty()) {
-          val savedReg = getRegisteredDevicePhone(context)
-          if (savedReg != null && registeredUsers.none {
-              !isAuthorizedAdminUser(it.usernameOrPhone) &&
-                CloudAuthManager.normalizePhoneKey(it.usernameOrPhone) == CloudAuthManager.normalizePhoneKey(savedReg)
-            }
-          ) {
-            saveRegisteredDevicePhone(context, null)
-          }
-        }
-        saveUsersToPreferences(context, registeredUsers.toList())
+  // Helper to merge a fetched/observed Cloud Firestore user snapshot into local state
+  fun mergeCloudUsersSnapshot(cloudUsers: List<UserAccount>) {
+    val (currDevId, currDevName) = getDeviceIdentifier(context)
+    val savedPhone = getSavedLoggedInUserPhone(context)
+    cloudUsers.forEach { cloudUser ->
+      val normCloud = CloudAuthManager.normalizePhoneKey(cloudUser.usernameOrPhone)
+      val existingIndex = registeredUsers.indexOfFirst {
+        CloudAuthManager.normalizePhoneKey(it.usernameOrPhone) == normCloud
       }
-    } catch (e: Throwable) {
-      Log.w("CloudSync", "Cloud sync observer inactive on this launch: ${e.localizedMessage}")
+      if (existingIndex >= 0) {
+        val local = registeredUsers[existingIndex]
+        val updated = local.copy(
+          fullName = cloudUser.fullName.ifBlank { local.fullName },
+          password = cloudUser.password.ifBlank { local.password },
+          isApproved = cloudUser.isApproved,
+          approvalTimestamp = cloudUser.approvalTimestamp,
+          paymentStatus = cloudUser.paymentStatus,
+          requestedGradePackage = cloudUser.requestedGradePackage.ifBlank { local.requestedGradePackage },
+          approvedGrades = if (cloudUser.approvedGrades.isNotEmpty()) cloudUser.approvedGrades else local.approvedGrades,
+          boundDeviceId = cloudUser.boundDeviceId,
+          boundDeviceName = cloudUser.boundDeviceName,
+          boundDate = cloudUser.boundDate,
+          slipImageUri = cloudUser.slipImageUri ?: local.slipImageUri,
+          requestDate = cloudUser.requestDate ?: local.requestDate,
+          requestTimestamp = cloudUser.requestTimestamp ?: local.requestTimestamp
+        )
+        if (updated != local) {
+          registeredUsers[existingIndex] = updated
+        }
+        if (loggedInUser != null && CloudAuthManager.normalizePhoneKey(loggedInUser!!.usernameOrPhone) == normCloud) {
+          val currentLogged = loggedInUser!!
+          val updatedLogged = currentLogged.copy(
+            fullName = cloudUser.fullName.ifBlank { currentLogged.fullName },
+            isApproved = cloudUser.isApproved,
+            approvalTimestamp = cloudUser.approvalTimestamp,
+            paymentStatus = cloudUser.paymentStatus,
+            requestedGradePackage = cloudUser.requestedGradePackage.ifBlank { currentLogged.requestedGradePackage },
+            approvedGrades = if (cloudUser.approvedGrades.isNotEmpty()) cloudUser.approvedGrades else currentLogged.approvedGrades,
+            boundDeviceId = cloudUser.boundDeviceId,
+            boundDeviceName = cloudUser.boundDeviceName,
+            boundDate = cloudUser.boundDate
+          )
+          if (updatedLogged != currentLogged) {
+            loggedInUser = updatedLogged
+            if (updatedLogged.isApproved && !currentLogged.isApproved && !updatedLogged.isApprovalExpired()) {
+              saveLoggedInUserPhone(context, updatedLogged.usernameOrPhone)
+              Toast.makeText(
+                context,
+                "🎉 ඇඩ්මින් විසින් ඔබගේ ගිණුම අනුමත කරන ලදී! සියලුම පහසුකම් දැන් විවෘතයි.",
+                Toast.LENGTH_LONG
+              ).show()
+            }
+          }
+        }
+      } else {
+        registeredUsers.add(cloudUser)
+      }
+
+      if (loggedInUser == null && !isAuthorizedAdminUser(cloudUser.usernameOrPhone)) {
+        val matchesSavedPhone = !savedPhone.isNullOrBlank() &&
+          CloudAuthManager.normalizePhoneKey(savedPhone) == normCloud &&
+          (cloudUser.boundDeviceId == null || cloudUser.boundDeviceId == currDevId)
+        val matchesBoundDevice = cloudUser.boundDeviceId == currDevId
+        if (matchesSavedPhone || matchesBoundDevice) {
+          val restored = cloudUser.copy(
+            boundDeviceId = cloudUser.boundDeviceId ?: currDevId,
+            boundDeviceName = cloudUser.boundDeviceName ?: currDevName
+          )
+          loggedInUser = restored
+          if (restored.isApproved && !restored.isApprovalExpired()) {
+            saveLoggedInUserPhone(context, restored.usernameOrPhone)
+            if (cloudUser.boundDeviceId == null) {
+              coroutineScope.launch { CloudAuthManager.syncUserToCloud(context, restored) }
+            }
+          }
+        }
+      }
+    }
+    val boundStudentForDevice = cloudUsers.find {
+      !isAuthorizedAdminUser(it.usernameOrPhone) && it.boundDeviceId == currDevId
+    }
+    if (boundStudentForDevice != null) {
+      saveRegisteredDevicePhone(context, boundStudentForDevice.usernameOrPhone)
+    } else if (cloudUsers.isNotEmpty()) {
+      val savedReg = getRegisteredDevicePhone(context)
+      if (savedReg != null && registeredUsers.none {
+          !isAuthorizedAdminUser(it.usernameOrPhone) &&
+            CloudAuthManager.normalizePhoneKey(it.usernameOrPhone) == CloudAuthManager.normalizePhoneKey(savedReg)
+        }
+      ) {
+        saveRegisteredDevicePhone(context, null)
+      }
+    }
+    saveUsersToPreferences(context, registeredUsers.toList())
+  }
+
+  // Cloud Sync: Observe users from Firestore with automatic retry on transient errors
+  LaunchedEffect(Unit) {
+    while (true) {
+      try {
+        if (!CloudAuthManager.isCloudAvailable(context)) break
+        CloudAuthManager.observeAllUsers(context).collect { cloudUsers ->
+          mergeCloudUsersSnapshot(cloudUsers)
+        }
+      } catch (e: kotlinx.coroutines.CancellationException) {
+        throw e
+      } catch (e: Throwable) {
+        Log.w("CloudSync", "Cloud sync observer reconnecting: ${e.localizedMessage}")
+      }
+      kotlinx.coroutines.delay(5000L)
+    }
+  }
+
+  // Force immediate server fetch whenever Admin authenticates or unlocks the Admin Bar
+  LaunchedEffect(isAdminAuthenticated, isAdminBarUnlocked) {
+    if (isAdminAuthenticated || isAdminBarUnlocked) {
+      CloudAuthManager.fetchAllUsersFromCloud(context).onSuccess { cloudUsers ->
+        mergeCloudUsersSnapshot(cloudUsers)
+      }
     }
   }
 
@@ -2287,6 +2305,7 @@ fun StudentPortalApp() {
           // Dedicated Admin Control Bar (ONLY visible to Admin, fully unlocked only via Step 2 Username & Password)
           if (isAdminAuthenticated) {
             if (isAdminBarUnlocked) {
+              var isRefreshingAdminBarCloud by remember { mutableStateOf(false) }
               AdminControlBannerBar(
                 pendingCount = registeredUsers.count { !it.isApproved && !isAuthorizedAdminUser(it.usernameOrPhone) },
                 approvedCount = registeredUsers.count { it.isApproved && !it.isApprovalExpired(currentClockMillis) && !isAuthorizedAdminUser(it.usernameOrPhone) },
@@ -2302,6 +2321,23 @@ fun StudentPortalApp() {
                 onLockBar = {
                   isAdminBarUnlocked = false
                   Toast.makeText(context, "🔒 ඇඩ්මින් බාර් එක අගුළුලන ලදී (Admin Bar Locked)", Toast.LENGTH_SHORT).show()
+                },
+                isRefreshingCloud = isRefreshingAdminBarCloud,
+                onRefreshCloud = {
+                  if (!isRefreshingAdminBarCloud) {
+                    isRefreshingAdminBarCloud = true
+                    coroutineScope.launch {
+                      val res = CloudAuthManager.fetchAllUsersFromCloud(context)
+                      isRefreshingAdminBarCloud = false
+                      res.onSuccess { cloudUsers ->
+                        mergeCloudUsersSnapshot(cloudUsers)
+                        val pNow = registeredUsers.count { !it.isApproved && !isAuthorizedAdminUser(it.usernameOrPhone) }
+                        Toast.makeText(context, "☁️ Cloud යාවත්කාලීන විය! අනුමැතියට: $pNow", Toast.LENGTH_SHORT).show()
+                      }.onFailure { err ->
+                        Toast.makeText(context, "⚠️ Cloud Sync අසාර්ථකයි: ${err.localizedMessage ?: "අන්තර්ජාලය පරීක්ෂා කරන්න"}", Toast.LENGTH_LONG).show()
+                      }
+                    }
+                  }
                 }
               )
               Spacer(modifier = Modifier.height(6.dp))
@@ -5561,6 +5597,8 @@ fun AdminControlBannerBar(
   onOpenDashboard: (String) -> Unit,
   onOpenExpiredList: () -> Unit,
   onLockBar: (() -> Unit)? = null,
+  isRefreshingCloud: Boolean = false,
+  onRefreshCloud: (() -> Unit)? = null,
   modifier: Modifier = Modifier
 ) {
   Card(
@@ -5579,7 +5617,10 @@ fun AdminControlBannerBar(
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically
       ) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
+        Row(
+          verticalAlignment = Alignment.CenterVertically,
+          modifier = Modifier.weight(1f).padding(end = 4.dp)
+        ) {
           Icon(
             imageVector = Icons.Default.AdminPanelSettings,
             contentDescription = "Admin",
@@ -5590,12 +5631,37 @@ fun AdminControlBannerBar(
           Text(
             text = "👑 Admin Bar (පරිපාලක පාලන තීරුව)",
             fontWeight = FontWeight.Bold,
-            fontSize = 12.sp,
-            color = Color.White
+            fontSize = 11.5.sp,
+            color = Color.White,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
           )
         }
 
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+          if (onRefreshCloud != null) {
+            Surface(
+              onClick = onRefreshCloud,
+              enabled = !isRefreshingCloud,
+              shape = RoundedCornerShape(8.dp),
+              color = Color(0xFF0C4A6E),
+              border = BorderStroke(1.dp, Color(0xFF38BDF8)),
+              modifier = Modifier.testTag("admin_bar_cloud_sync_button")
+            ) {
+              Row(
+                modifier = Modifier.padding(horizontal = 6.dp, vertical = 4.dp),
+                verticalAlignment = Alignment.CenterVertically
+              ) {
+                Icon(
+                  imageVector = Icons.Default.Refresh,
+                  contentDescription = "Sync Cloud Requests",
+                  tint = Color(0xFF7DD3FC),
+                  modifier = Modifier.size(12.dp)
+                )
+              }
+            }
+          }
+
           if (onLockBar != null) {
             Surface(
               onClick = onLockBar,
@@ -5632,12 +5698,12 @@ fun AdminControlBannerBar(
             border = BorderStroke(1.dp, Color(0xFF334155))
           ) {
             Row(
-              modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+              modifier = Modifier.padding(horizontal = 7.dp, vertical = 4.dp),
               verticalAlignment = Alignment.CenterVertically
             ) {
               Text(
                 text = "පාලක මධ්‍යස්ථානය ⚙️",
-                fontSize = 10.sp,
+                fontSize = 9.5.sp,
                 fontWeight = FontWeight.Bold,
                 color = Color(0xFF93C5FD)
               )
