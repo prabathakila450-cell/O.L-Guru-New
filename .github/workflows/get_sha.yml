@@ -1,22 +1,50 @@
-name: Get SHA-1 Fingerprint
+name: Build and Release APK
 
-on: [workflow_dispatch]
+on:
+  push:
+    branches: [ "main", "master" ]
+  pull_request:
+    branches: [ "main", "master" ]
 
 jobs:
-  get-sha:
+  build:
     runs-on: ubuntu-latest
+
     steps:
-      - name: Checkout Code
+      # 1. ප්‍රොජෙක්ට් කෝඩ් එක චෙක් අවුට් කරගැනීම
+      - name: Checkout Source Code
         uses: actions/checkout@v4
 
-      - name: Set up Java
+      # 2. ජාවා පරිසරය සකස් කිරීම (Java 21)
+      - name: Set up Java 21
         uses: actions/setup-java@v4
         with:
           distribution: 'temurin'
-          java-version: '17'
+          java-version: '21'
 
+      # 3. Gradle සෙට්අප් කිරීම
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v3
+
+      # 4. Gradlew විධානය ක්‍රියාත්මක කිරීමට අවසර දීම
       - name: Grant execute permission for gradlew
         run: chmod +x gradlew
 
-      - name: Run Signing Report
+      # 5. SHA-1 අගය බලාගැනීම සඳහා Signing Report එක ධාවනය කිරීම
+      - name: Generate Signing Report (Get SHA-1)
         run: ./gradlew signingReport
+
+      # 6. ඩීබග් APK එක බිල්ඩ් කිරීම
+      - name: Build Debug APK with Gradle
+        run: ./gradlew assembleDebug
+
+      # 7. බිල්ඩ් වූ APK එක පරික්ෂා කිරීම
+      - name: Verify APK Output
+        run: ls -la app/build/outputs/apk/debug/
+
+      # 8. APK එක ආර්ටිෆෑක්ට් එකක් ලෙස අප්ලෝඩ් කිරීම
+      - name: Upload APK as Workflow Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: app-debug
+          path: app/build/outputs/apk/debug/*.apk
