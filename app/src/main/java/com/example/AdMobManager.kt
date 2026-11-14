@@ -9,6 +9,11 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -31,6 +36,7 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import java.lang.ref.WeakReference
 
 /**
@@ -49,6 +55,7 @@ object AdMobConfig {
  */
 object AdMobManager {
   private const val TAG = "AdMobManager"
+  @Volatile
   private var isInitialized = false
   private var interstitialAd: InterstitialAd? = null
   private var isAdLoading = false
@@ -58,32 +65,39 @@ object AdMobManager {
   fun initialize(context: Context) {
     if (isInitialized) return
     isInitialized = true
-    try {
-      // 100% Guarantee: Restrict ads to under-18 appropriate / family-friendly G-rated content
-      // and tag for child-directed treatment & under age of consent (COPPA / GDPR compliant).
-      val requestConfiguration = MobileAds.getRequestConfiguration()
-        .toBuilder()
-        .setMaxAdContentRating(RequestConfiguration.MAX_AD_CONTENT_RATING_G)
-        .setTagForChildDirectedTreatment(RequestConfiguration.TAG_FOR_CHILD_DIRECTED_TREATMENT_TRUE)
-        .setTagForUnderAgeOfConsent(RequestConfiguration.TAG_FOR_UNDER_AGE_OF_CONSENT_TRUE)
-        .build()
-      MobileAds.setRequestConfiguration(requestConfiguration)
-
-      MobileAds.initialize(context) { status ->
-        Log.d(TAG, "AdMob MobileAds initialized with strict under-18 child-safe config: $status")
-        loadInterstitial(context.applicationContext)
-      }
-
-      // 🛡️ 1. COPPA & GDPR - Meta Audience Network 18ට අඩු ළමුන්ට 100% ආරක්ෂිත Ads සක්‍රීය කිරීම
+    val appCtx = context.applicationContext
+    CoroutineScope(Dispatchers.IO).launch {
       try {
-        com.facebook.ads.AdSettings.setMixedAudience(true)
-        com.facebook.ads.AudienceNetworkAds.initialize(context)
-        Log.d(TAG, "Meta Audience Network initialized with mixed audience (under-18 safe)")
-      } catch (e: Exception) {
-        Log.e(TAG, "Error initializing Meta Audience Network", e)
+        // Allow initial Compose UI frames & Splash to render before inflating WebView/AdMob
+        delay(1500L)
+        // 100% Guarantee: Restrict ads to under-18 appropriate / family-friendly G-rated content
+        // and tag for child-directed treatment & under age of consent (COPPA / GDPR compliant).
+        val requestConfiguration = MobileAds.getRequestConfiguration()
+          .toBuilder()
+          .setMaxAdContentRating(RequestConfiguration.MAX_AD_CONTENT_RATING_G)
+          .setTagForChildDirectedTreatment(RequestConfiguration.TAG_FOR_CHILD_DIRECTED_TREATMENT_TRUE)
+          .setTagForUnderAgeOfConsent(RequestConfiguration.TAG_FOR_UNDER_AGE_OF_CONSENT_TRUE)
+          .build()
+        MobileAds.setRequestConfiguration(requestConfiguration)
+
+        MobileAds.initialize(appCtx) { status ->
+          Log.d(TAG, "AdMob MobileAds initialized with strict under-18 child-safe config: $status")
+          CoroutineScope(Dispatchers.Main).launch {
+            loadInterstitial(appCtx)
+          }
+        }
+
+        // 🛡️ 1. COPPA & GDPR - Meta Audience Network 18ට අඩු ළමුන්ට 100% ආරක්ෂිත Ads සක්‍රීය කිරීම
+        try {
+          com.facebook.ads.AdSettings.setMixedAudience(true)
+          com.facebook.ads.AudienceNetworkAds.initialize(appCtx)
+          Log.d(TAG, "Meta Audience Network initialized with mixed audience (under-18 safe)")
+        } catch (e: Throwable) {
+          Log.e(TAG, "Error initializing Meta Audience Network", e)
+        }
+      } catch (e: Throwable) {
+        Log.e(TAG, "Error initializing MobileAds", e)
       }
-    } catch (e: Exception) {
-      Log.e(TAG, "Error initializing MobileAds", e)
     }
   }
 
@@ -94,39 +108,43 @@ object AdMobManager {
   fun loadInterstitial(context: Context) {
     if (interstitialAd != null || isAdLoading) return
     isAdLoading = true
-    val adRequest = AdRequest.Builder().build()
-    InterstitialAd.load(
-      context,
-      AdMobConfig.INTERSTITIAL_AD_UNIT_ID,
-      adRequest,
-      object : InterstitialAdLoadCallback() {
-        override fun onAdLoaded(ad: InterstitialAd) {
-          Log.d(TAG, "Interstitial Ad loaded successfully")
-          interstitialAd = ad
-          isAdLoading = false
-          ad.fullScreenContentCallback = object : FullScreenContentCallback() {
-            override fun onAdDismissedFullScreenContent() {
-              Log.d(TAG, "Interstitial Ad dismissed")
-              interstitialAd = null
-              // Pre-load the next ad for the upcoming 30m trigger
-              loadInterstitial(context)
-            }
+    try {
+      val adRequest = AdRequest.Builder().build()
+      InterstitialAd.load(
+        context,
+        AdMobConfig.INTERSTITIAL_AD_UNIT_ID,
+        adRequest,
+        object : InterstitialAdLoadCallback() {
+          override fun onAdLoaded(ad: InterstitialAd) {
+            Log.d(TAG, "Interstitial Ad loaded successfully")
+            interstitialAd = ad
+            isAdLoading = false
+            ad.fullScreenContentCallback = object : FullScreenContentCallback() {
+              override fun onAdDismissedFullScreenContent() {
+                Log.d(TAG, "Interstitial Ad dismissed")
+                interstitialAd = null
+                loadInterstitial(context)
+              }
 
-            override fun onAdFailedToShowFullScreenContent(adError: com.google.android.gms.ads.AdError) {
-              Log.e(TAG, "Interstitial Ad failed to show: ${adError.message}")
-              interstitialAd = null
-              loadInterstitial(context)
+              override fun onAdFailedToShowFullScreenContent(adError: com.google.android.gms.ads.AdError) {
+                Log.e(TAG, "Interstitial Ad failed to show: ${adError.message}")
+                interstitialAd = null
+                loadInterstitial(context)
+              }
             }
           }
-        }
 
-        override fun onAdFailedToLoad(loadAdError: LoadAdError) {
-          Log.d(TAG, "Interstitial Ad load status: ${loadAdError.message} (Code: ${loadAdError.code}) - Normal inventory fill status")
-          interstitialAd = null
-          isAdLoading = false
+          override fun onAdFailedToLoad(loadAdError: LoadAdError) {
+            Log.d(TAG, "Interstitial Ad load status: ${loadAdError.message} (Code: ${loadAdError.code}) - Normal inventory fill status")
+            interstitialAd = null
+            isAdLoading = false
+          }
         }
-      }
-    )
+      )
+    } catch (t: Throwable) {
+      isAdLoading = false
+      Log.w(TAG, "Skipped interstitial ad load: ${t.localizedMessage}")
+    }
   }
 
   /**
@@ -168,13 +186,18 @@ object AdMobManager {
 
 /**
  * Jetpack Compose Top Banner Ad Composable.
- * Displayed fixed at the top of the app screen with status bar insets padding
- * so that it never overlaps or covers headers, buttons, or app content.
+ * Defers WebView/AdView inflation until after the initial UI frames render to prevent cold-start ANRs.
  */
 @Composable
 fun TopBannerAdView(
   modifier: Modifier = Modifier
 ) {
+  var attachBanner by remember { mutableStateOf(false) }
+  LaunchedEffect(Unit) {
+    delay(1800L)
+    attachBanner = true
+  }
+
   Box(
     modifier = modifier
       .fillMaxWidth()
@@ -184,26 +207,32 @@ fun TopBannerAdView(
       .testTag("top_banner_ad_container"),
     contentAlignment = Alignment.Center
   ) {
-    AndroidView(
-      modifier = Modifier
-        .fillMaxWidth()
-        .height(42.dp)
-        .testTag("admob_banner_view"),
-      factory = { ctx ->
-        AdView(ctx).apply {
-          setAdSize(AdSize.BANNER)
-          adUnitId = AdMobConfig.BANNER_AD_UNIT_ID
-          adListener = object : AdListener() {
-            override fun onAdLoaded() {
-              Log.d("TopBannerAdView", "Banner ad loaded successfully")
-            }
-            override fun onAdFailedToLoad(error: LoadAdError) {
-              Log.w("TopBannerAdView", "Banner ad failed to load: ${error.message} (code: ${error.code})")
+    if (attachBanner) {
+      AndroidView(
+        modifier = Modifier
+          .fillMaxWidth()
+          .height(42.dp)
+          .testTag("admob_banner_view"),
+        factory = { ctx ->
+          AdView(ctx).apply {
+            try {
+              setAdSize(AdSize.BANNER)
+              adUnitId = AdMobConfig.BANNER_AD_UNIT_ID
+              adListener = object : AdListener() {
+                override fun onAdLoaded() {
+                  Log.d("TopBannerAdView", "Banner ad loaded successfully")
+                }
+                override fun onAdFailedToLoad(error: LoadAdError) {
+                  Log.w("TopBannerAdView", "Banner ad failed to load: ${error.message} (code: ${error.code})")
+                }
+              }
+              loadAd(AdRequest.Builder().build())
+            } catch (t: Throwable) {
+              Log.w("TopBannerAdView", "Banner AdView init skipped: ${t.localizedMessage}")
             }
           }
-          loadAd(AdRequest.Builder().build())
         }
-      }
-    )
+      )
+    }
   }
 }

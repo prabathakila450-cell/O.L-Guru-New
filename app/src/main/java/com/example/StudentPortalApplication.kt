@@ -20,9 +20,12 @@ class StudentPortalApplication : Application() {
       } catch (_: Exception) {}
     }
 
-    // Pre-create and ensure full read/write/execute permissions on Chromium WebView cache directories
-    // to prevent simple_backend_impl.cc "cache directory inaccessible right after creation" errors
-    initWebViewCacheDirectories(cacheDir)
+    // Pre-create Chromium WebView cache directories on a background thread
+    // so Application.onCreate() never blocks the Main Thread.
+    val appCacheDir = cacheDir
+    Thread {
+      initWebViewCacheDirectories(appCacheDir)
+    }.start()
   }
 
   companion object {

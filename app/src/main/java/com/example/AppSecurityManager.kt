@@ -96,7 +96,8 @@ object AppSecurityManager {
         || product.contains("sdk")
         || product.contains("emulator")
         || product.contains("simulator")
-        || product.contains("cf_x86")
+        || product.contains("cf_")
+        || product.contains("aosp_cf")
         || product.contains("cuttlefish")
         || hardware.contains("goldfish")
         || hardware.contains("ranchu")
@@ -107,9 +108,14 @@ object AppSecurityManager {
         || board.contains("goldfish")
         || board.contains("ranchu")
         || product.contains("sdk_gphone")
+        || model.contains("sdk_gphone")
+        || device.contains("emu64")
+        || device.contains("vsoc")
+        || fingerprint.contains("emulator")
         || product.contains("sdk_google")
         || product.contains("vbox")
         || hardware.contains("qemu")
+        || Build.HOST.lowercase().contains("android-build") && product.contains("generic")
   }
 
   fun isScreenProtectionEnabled(context: Context): Boolean {

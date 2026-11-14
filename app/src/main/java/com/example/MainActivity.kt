@@ -345,6 +345,14 @@ fun saveUsersToPreferences(context: Context, users: List<UserAccount>) {
   }
 }
 
+fun saveUsersToPreferencesAsync(context: Context, users: List<UserAccount>) {
+  val appCtx = context.applicationContext
+  val snapshot = users.toList()
+  kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO).launch {
+    saveUsersToPreferences(appCtx, snapshot)
+  }
+}
+
 fun loadUsersFromPreferences(context: Context): List<UserAccount> {
   val result = mutableListOf<UserAccount>()
   try {
@@ -752,9 +760,16 @@ fun onGoogleSignInClicked(
         Log.w("Auth", "Google Sign-In fallback cancelled: $detail", cancelEx)
         onAuthCancelled(detail)
       } catch (fallbackEx: GetCredentialException) {
-        val detail = fallbackEx.errorMessage?.toString() ?: fallbackEx.localizedMessage ?: "Sign in failed"
-        Log.e("Auth", "Google Sign-In fallback failed: $detail", fallbackEx)
-        onAuthError(detail)
+        val rawDetail = fallbackEx.errorMessage?.toString() ?: fallbackEx.localizedMessage ?: "Sign in failed"
+        val friendlyDetail = if (rawDetail.contains("No credentials", ignoreCase = true) ||
+          fallbackEx::class.java.simpleName.contains("NoCredential")
+        ) {
+          "මෙම දුරකථනයේ Google ගිණුමක් සම්බන්ධ කර නොමැත. Settings > Accounts වෙත ගොස් Google ගිණුමක් එක් කරන්න (නැතහොත් ඇඩ්මින් ටැබ් එකෙන් පිවිසෙන්න)."
+        } else {
+          rawDetail
+        }
+        Log.e("Auth", "Google Sign-In fallback failed: $rawDetail", fallbackEx)
+        onAuthError(friendlyDetail)
       } catch (e: Exception) {
         Log.e("Auth", "Google Sign-In fallback Firebase auth failed", e)
         onAuthError(e.localizedMessage ?: "Sign in failed")
@@ -771,8 +786,6 @@ class MainActivity : ComponentActivity() {
 
   override fun onCreate(savedInstanceState: Bundle?) {
     super.onCreate(savedInstanceState)
-    // Pre-create Chromium WebView code cache directories with full read/write/traversal permissions
-    StudentPortalApplication.initWebViewCacheDirectories(cacheDir)
 
     window.setBackgroundDrawable(android.graphics.drawable.ColorDrawable(android.graphics.Color.parseColor("#F8FAFC")))
     AppSecurityManager.applyScreenProtection(this, !AppSecurityManager.isAdminSession)
@@ -811,11 +824,12 @@ class MainActivity : ComponentActivity() {
       }
     }
 
-    // Initialize Google AdMob & Start 30-Minute Automatic Full-Screen Interstitial Timer after first frame
-    Handler(Looper.getMainLooper()).post {
+    // Initialize Google AdMob & 30-Minute Timer off the critical startup frame to avoid WebView cold-start ANRs
+    lifecycleScope.launch {
+      kotlinx.coroutines.delay(1500L)
       try {
-        AdMobManager.initialize(this)
-        AdMobManager.startInterstitialTimer(this)
+        AdMobManager.initialize(applicationContext)
+        AdMobManager.startInterstitialTimer(this@MainActivity)
       } catch (e: Throwable) {
         Log.e("MainActivity", "Deferred AdMob initialization failed", e)
       }
@@ -915,7 +929,7 @@ fun StudentPortalApp() {
         merged.add(admin)
       }
     }
-    saveUsersToPreferences(context, merged)
+    saveUsersToPreferencesAsync(context, merged)
     list.addAll(merged)
     list
   }
@@ -946,6 +960,7 @@ fun StudentPortalApp() {
   // Cloud Sync: Observe users from Firestore and merge with local state
   val coroutineScope = androidx.compose.runtime.rememberCoroutineScope()
   LaunchedEffect(Unit) {
+    kotlinx.coroutines.delay(700L)
     attemptAutoSignIn(
       context = context,
       credentialManager = CredentialManager.create(context),
@@ -954,7 +969,9 @@ fun StudentPortalApp() {
           com.google.firebase.Firebase.auth.currentUser?.email
         } catch (_: Throwable) { null }
         if (!currentEmail.isNullOrBlank() && isAuthorizedAdminUser(currentEmail)) {
-          val adminAcc = registeredUsers.find { isAuthorizedAdminUser(it.usernameOrPhone) }
+          val adminAcc = registeredUsers.find {
+            it.usernameOrPhone.trim().equals(currentEmail.trim(), ignoreCase = true)
+          } ?: registeredUsers.find { isAuthorizedAdminUser(it.usernameOrPhone) }
           if (adminAcc != null) {
             loggedInUser = adminAcc
             isAdminAuthenticated = true
@@ -1068,7 +1085,7 @@ fun StudentPortalApp() {
         saveRegisteredDevicePhone(context, null)
       }
     }
-    saveUsersToPreferences(context, registeredUsers.toList())
+    saveUsersToPreferencesAsync(context, registeredUsers.toList())
   }
 
   // Cloud Sync: Observe users from Firestore with automatic retry on transient errors
@@ -3598,13 +3615,20 @@ fun StudentPortalApp() {
             setAdminSessionActive(context, isUserAdmin)
             AppSecurityManager.isAdminSession = isUserAdmin
             saveLoggedInUserPhone(context, user.usernameOrPhone)
-            saveUsersToPreferences(context, registeredUsers.toList())
+            saveUsersToPreferencesAsync(context, registeredUsers.toList())
             showAuthRequiredDialog = false
           },
           onAdminLoginSuccess = {
+            val adminAcc = registeredUsers.find {
+              val email = try { com.google.firebase.Firebase.auth.currentUser?.email } catch (_: Throwable) { null }
+              !email.isNullOrBlank() && it.usernameOrPhone.trim().equals(email.trim(), ignoreCase = true)
+            } ?: registeredUsers.find { isAuthorizedAdminUser(it.usernameOrPhone) }
+              ?: UserAccount("3", "අකිල ප්‍රභාත් දිසානායක (Admin)", "prabathakila450@gmail.com", "A20020521PD", isApproved = true, paymentStatus = "Approved", requestedGradePackage = "06 සිට 11 දක්වා සියලුම ශ්‍රේණි (All Grades Mega Pack)", approvedGrades = listOf("06", "07", "08", "09", "10", "11", "6 ශ්‍රේණිය", "7 ශ්‍රේණිය", "8 ශ්‍රේණිය", "9 ශ්‍රේණිය", "10 ශ්‍රේණිය", "11 ශ්‍රේණිය"))
+            loggedInUser = adminAcc
             isAdminAuthenticated = true
             setAdminSessionActive(context, true)
             AppSecurityManager.isAdminSession = true
+            saveLoggedInUserPhone(context, adminAcc.usernameOrPhone)
             showAuthRequiredDialog = false
           },
           onDismiss = { showAuthRequiredDialog = false },
@@ -10513,12 +10537,19 @@ fun LoginAndApprovalDialog(
                         googleSignInErrorMsg = null
 
                         if (!userEmail.isNullOrBlank() && isAuthorizedAdminUser(userEmail)) {
+                          val adminAcc = registeredUsers.find {
+                            it.usernameOrPhone.trim().equals(userEmail.trim(), ignoreCase = true)
+                          } ?: registeredUsers.find { isAuthorizedAdminUser(it.usernameOrPhone) }
+                            ?: UserAccount("3", "අකිල ප්‍රභාත් දිසානායක (Admin)", userEmail, "A20020521PD", isApproved = true, paymentStatus = "Approved", requestedGradePackage = "06 සිට 11 දක්වා සියලුම ශ්‍රේණි (All Grades Mega Pack)", approvedGrades = listOf("06", "07", "08", "09", "10", "11", "6 ශ්‍රේණිය", "7 ශ්‍රේණිය", "8 ශ්‍රේණිය", "9 ශ්‍රේණිය", "10 ශ්‍රේණිය", "11 ශ්‍රේණිය"))
                           Toast.makeText(context, "👑 සාදරයෙන් පිළිගනිමු, ඇඩ්මින්තුමනි! Google මඟින් තහවුරු විය.", Toast.LENGTH_LONG).show()
+                          onLoginSuccess(adminAcc)
                           onAdminLoginSuccess()
                         } else {
                           val existingStudent = registeredUsers.find {
-                            !isAuthorizedAdminUser(it.usernameOrPhone) &&
-                            (!userEmail.isNullOrBlank() && it.usernameOrPhone.trim().equals(userEmail.trim(), ignoreCase = true))
+                            !isAuthorizedAdminUser(it.usernameOrPhone) && (
+                              (!userEmail.isNullOrBlank() && it.usernameOrPhone.trim().equals(userEmail.trim(), ignoreCase = true)) ||
+                              (it.boundDeviceId == currDevId && it.isApproved && !it.isApprovalExpired())
+                            )
                           }
                           if (existingStudent != null && existingStudent.isApproved && !existingStudent.isApprovalExpired()) {
                             Toast.makeText(context, "🎉 සාදරයෙන් පිළිගනිමු ${existingStudent.fullName}! (Google මඟින් තහවුරු විය)", Toast.LENGTH_LONG).show()
@@ -10855,12 +10886,19 @@ fun LoginAndApprovalDialog(
                           googleSignInErrorMsg = null
 
                           if (!userEmail.isNullOrBlank() && isAuthorizedAdminUser(userEmail)) {
+                            val adminAcc = registeredUsers.find {
+                              it.usernameOrPhone.trim().equals(userEmail.trim(), ignoreCase = true)
+                            } ?: registeredUsers.find { isAuthorizedAdminUser(it.usernameOrPhone) }
+                              ?: UserAccount("3", "අකිල ප්‍රභාත් දිසානායක (Admin)", userEmail, "A20020521PD", isApproved = true, paymentStatus = "Approved", requestedGradePackage = "06 සිට 11 දක්වා සියලුම ශ්‍රේණි (All Grades Mega Pack)", approvedGrades = listOf("06", "07", "08", "09", "10", "11", "6 ශ්‍රේණිය", "7 ශ්‍රේණිය", "8 ශ්‍රේණිය", "9 ශ්‍රේණිය", "10 ශ්‍රේණිය", "11 ශ්‍රේණිය"))
                             Toast.makeText(context, "👑 සාදරයෙන් පිළිගනිමු, ඇඩ්මින්තුමනි! Google මඟින් තහවුරු විය.", Toast.LENGTH_LONG).show()
+                            onLoginSuccess(adminAcc)
                             onAdminLoginSuccess()
                           } else {
                             val existingStudent = registeredUsers.find {
-                              !isAuthorizedAdminUser(it.usernameOrPhone) &&
-                              (!userEmail.isNullOrBlank() && it.usernameOrPhone.trim().equals(userEmail.trim(), ignoreCase = true))
+                              !isAuthorizedAdminUser(it.usernameOrPhone) && (
+                                (!userEmail.isNullOrBlank() && it.usernameOrPhone.trim().equals(userEmail.trim(), ignoreCase = true)) ||
+                                (it.boundDeviceId == currDevId && it.isApproved && !it.isApprovalExpired())
+                              )
                             }
                             if (existingStudent != null && existingStudent.isApproved && !existingStudent.isApprovalExpired()) {
                               Toast.makeText(context, "🎉 සාදරයෙන් පිළිගනිමු ${existingStudent.fullName}! (Google මඟින් තහවුරු විය)", Toast.LENGTH_LONG).show()
@@ -11073,7 +11111,84 @@ fun LoginAndApprovalDialog(
               color = NeutralMedium,
               lineHeight = 15.sp
             )
-            Spacer(modifier = Modifier.height(12.dp))
+            Spacer(modifier = Modifier.height(10.dp))
+
+            OutlinedButton(
+              onClick = {
+                if (!isGoogleSigningIn && !isSubmittingRequest) {
+                  isGoogleSigningIn = true
+                  googleSignInErrorMsg = null
+                  onGoogleSignInClicked(
+                    context = context,
+                    credentialManager = CredentialManager.create(context),
+                    onAuthSuccess = {
+                      isGoogleSigningIn = false
+                      val userEmail = try {
+                        com.google.firebase.Firebase.auth.currentUser?.email
+                      } catch (_: Throwable) {
+                        null
+                      }
+                      signedInGoogleEmail = userEmail ?: "Connected"
+                      googleSignInErrorMsg = null
+                      if (!userEmail.isNullOrBlank() && isAuthorizedAdminUser(userEmail)) {
+                        val adminAcc = registeredUsers.find {
+                          it.usernameOrPhone.trim().equals(userEmail.trim(), ignoreCase = true)
+                        } ?: registeredUsers.find { isAuthorizedAdminUser(it.usernameOrPhone) }
+                          ?: UserAccount("3", "අකිල ප්‍රභාත් දිසානායක (Admin)", userEmail, "A20020521PD", isApproved = true, paymentStatus = "Approved", requestedGradePackage = "06 සිට 11 දක්වා සියලුම ශ්‍රේණි (All Grades Mega Pack)", approvedGrades = listOf("06", "07", "08", "09", "10", "11", "6 ශ්‍රේණිය", "7 ශ්‍රේණිය", "8 ශ්‍රේණිය", "9 ශ්‍රේණිය", "10 ශ්‍රේණිය", "11 ශ්‍රේණිය"))
+                        Toast.makeText(context, "👑 සාදරයෙන් පිළිගනිමු, ඇඩ්මින්තුමනි! Google මඟින් තහවුරු විය.", Toast.LENGTH_LONG).show()
+                        onLoginSuccess(adminAcc)
+                        onAdminLoginSuccess()
+                      } else {
+                        Toast.makeText(context, "❌ මෙම Google ගිණුම (${userEmail ?: "Unknown"}) ඇඩ්මින් ගිණුමක් ලෙස අනුමත කර නොමැත.", Toast.LENGTH_LONG).show()
+                      }
+                    },
+                    onAuthError = { err ->
+                      isGoogleSigningIn = false
+                      googleSignInErrorMsg = err
+                      Toast.makeText(context, "⚠️ Google Sign-In අසාර්ථකයි: $err", Toast.LENGTH_LONG).show()
+                    },
+                    scope = coroutineScope,
+                    onAuthCancelled = { detail ->
+                      isGoogleSigningIn = false
+                      val detailNote = if (!detail.isNullOrBlank()) " ($detail)" else ""
+                      googleSignInErrorMsg = "Google ගිණුම තෝරා අවසර ලබාදීම අවලංගු විය$detailNote"
+                      Toast.makeText(context, "⚠️ Google ගිණුම තෝරා අවසර ලබාදෙන්න$detailNote", Toast.LENGTH_LONG).show()
+                    }
+                  )
+                }
+              },
+              enabled = !isGoogleSigningIn && !isSubmittingRequest,
+              shape = RoundedCornerShape(10.dp),
+              border = BorderStroke(1.2.dp, Color(0xFFB45309)),
+              modifier = Modifier.fillMaxWidth().padding(bottom = 10.dp).height(44.dp).testTag("admin_google_sign_in_button")
+            ) {
+              Icon(Icons.Default.AccountBox, contentDescription = "Admin Google Sign In", tint = Color(0xFFB45309), modifier = Modifier.size(18.dp))
+              Spacer(modifier = Modifier.width(8.dp))
+              Text(
+                text = if (isGoogleSigningIn) "Google සත්‍යාපනය වෙමින්..." else "Google මඟින් ඇඩ්මින් පිවිසුම (Admin Email)",
+                fontSize = 11.5.sp,
+                fontWeight = FontWeight.Bold,
+                color = Color(0xFFB45309)
+              )
+            }
+
+            if (!googleSignInErrorMsg.isNullOrBlank()) {
+              Surface(
+                shape = RoundedCornerShape(8.dp),
+                color = Color(0xFFFEF2F2),
+                border = BorderStroke(1.dp, Color(0xFFFCA5A5)),
+                modifier = Modifier.fillMaxWidth().padding(bottom = 10.dp)
+              ) {
+                Text(
+                  text = "⚠️ ${googleSignInErrorMsg}",
+                  fontSize = 10.5.sp,
+                  color = Color(0xFF991B1B),
+                  modifier = Modifier.padding(8.dp)
+                )
+              }
+            }
+
+            Spacer(modifier = Modifier.height(6.dp))
 
             androidx.compose.material3.OutlinedTextField(
               value = adminPhoneOrEmail,
