@@ -15,12 +15,10 @@ jobs:
           distribution: 'temurin'
           java-version: '21'
 
-      - name: Grant execute permission for gradlew
-        run: chmod +x ./gradlew
-
       - name: Decode Keystore
         run: |
           echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 --decode > my-upload-key.jks
 
-      - name: Run signingReport
-        run: ./gradlew signingReport
+      - name: Get SHA-1
+        run: |
+          keytool -list -v -keystore my-upload-key.jks -alias upload -storepass "${{ secrets.KEYSTORE_PASSWORD }}"
