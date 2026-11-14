@@ -64,6 +64,9 @@ object AppSecurityManager {
   @Volatile
   var isAdminSession: Boolean = false
 
+  @Volatile
+  var isCleanHomeScreenActive: Boolean = false
+
   private val failedAttemptsMap = mutableMapOf<String, Pair<Int, Long>>() // username -> (attempts, lockUntilTimestamp)
   private const val MAX_FAILED_ATTEMPTS = 5
   private const val LOCKOUT_DURATION_MS = 60_000L // 1 minute lockout
@@ -106,32 +109,38 @@ object AppSecurityManager {
   }
 
   fun isScreenProtectionEnabled(context: Context): Boolean {
+    if (!isAdminSession) return true
     val prefs = context.getSharedPreferences(PREFS_SECURITY, Context.MODE_PRIVATE)
-    return prefs.getBoolean(KEY_SCREEN_CAPTURE_BLOCKED, true)
+    return prefs.getBoolean(KEY_SCREEN_CAPTURE_BLOCKED, false)
   }
 
   fun setScreenProtectionEnabled(activity: Activity, enabled: Boolean) {
+    if (!isAdminSession) return
     val prefs = activity.getSharedPreferences(PREFS_SECURITY, Context.MODE_PRIVATE)
     prefs.edit().putBoolean(KEY_SCREEN_CAPTURE_BLOCKED, enabled).apply()
     applyScreenProtection(activity, enabled)
   }
 
   fun isAntiCopyEnabled(context: Context): Boolean {
+    if (!isAdminSession) return true
     val prefs = context.getSharedPreferences(PREFS_SECURITY, Context.MODE_PRIVATE)
-    return prefs.getBoolean(KEY_ANTI_COPY_ENABLED, true) // Always enabled by default
+    return prefs.getBoolean(KEY_ANTI_COPY_ENABLED, true)
   }
 
   fun setAntiCopyEnabled(context: Context, enabled: Boolean) {
+    if (!isAdminSession) return
     val prefs = context.getSharedPreferences(PREFS_SECURITY, Context.MODE_PRIVATE)
     prefs.edit().putBoolean(KEY_ANTI_COPY_ENABLED, enabled).apply()
   }
 
   fun isDynamicWatermarkEnabled(context: Context): Boolean {
+    if (!isAdminSession) return true
     val prefs = context.getSharedPreferences(PREFS_SECURITY, Context.MODE_PRIVATE)
     return prefs.getBoolean(KEY_DYNAMIC_WATERMARK_ENABLED, true)
   }
 
   fun setDynamicWatermarkEnabled(context: Context, enabled: Boolean) {
+    if (!isAdminSession) return
     val prefs = context.getSharedPreferences(PREFS_SECURITY, Context.MODE_PRIVATE)
     prefs.edit().putBoolean(KEY_DYNAMIC_WATERMARK_ENABLED, enabled).apply()
   }
@@ -139,29 +148,73 @@ object AppSecurityManager {
   fun applyScreenProtection(activity: Activity, isEnabled: Boolean) {
     try {
       activity.runOnUiThread {
-        // Allow screen capture on emulator/browser preview so WebRTC streaming preview renders clearly.
-        // On physical student devices, add FLAG_SECURE to block real physical screenshots and screen recordings.
-        val isEmulator = isDeviceEmulator()
-        if (isEnabled && !isEmulator) {
+        // Non-admin users ALWAYS get FLAG_SECURE everywhere EXCEPT on a clean Home screen
+        // (no sub-screens, modals, sheets, or study dialogs open). Admin retains full freedom.
+        val enforceSecure = if (isAdminSession) isEnabled else !isCleanHomeScreenActive
+        if (enforceSecure) {
           activity.window.addFlags(WindowManager.LayoutParams.FLAG_SECURE)
         } else {
           activity.window.clearFlags(WindowManager.LayoutParams.FLAG_SECURE)
+        }
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+          try {
+            activity.setRecentsScreenshotEnabled(!enforceSecure)
+          } catch (_: Exception) {}
         }
       }
     } catch (_: Exception) {}
   }
 
-  fun enforceSecurityForUser(activity: Activity, isAdmin: Boolean) {
+  fun enforceSecurityForUser(
+    activity: Activity,
+    isAdmin: Boolean,
+    allowHomeScreenshotOnly: Boolean = isCleanHomeScreenActive
+  ) {
     isAdminSession = isAdmin
-    applyScreenProtection(activity, !isAdmin)
+    isCleanHomeScreenActive = allowHomeScreenshotOnly
+    val shouldProtect = if (isAdmin) isScreenProtectionEnabled(activity) else !allowHomeScreenshotOnly
+    applyScreenProtection(activity, shouldProtect)
+  }
+
+  fun canDownloadOrOpenExternal(context: Context, showBlockedToast: Boolean = true): Boolean {
+    if (isAdminSession) return true
+    if (showBlockedToast) {
+      Toast.makeText(
+        context,
+        "🔒 ආරක්ෂක නීති අනුව අන්තර්ගතයන් භාගත කිරීම (Download) හෝ බාහිරව විවෘත කිරීම 100% අවහිර කර ඇත!",
+        Toast.LENGTH_SHORT
+      ).show()
+    }
+    return false
   }
 
   fun canCopyContent(context: Context): Boolean {
     return isAdminSession
   }
 
+  fun copyTextIfAdmin(
+    context: Context,
+    label: String,
+    text: String,
+    successToast: String = "✅ පිටපත් විය!"
+  ): Boolean {
+    if (!isAdminSession) {
+      Toast.makeText(
+        context,
+        "🔒 ආරක්ෂක නීති අනුව අන්තර්ගතයන් පිටපත් කිරීම (Copy) 100% අවහිර කර ඇත!",
+        Toast.LENGTH_SHORT
+      ).show()
+      return false
+    }
+    val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as? android.content.ClipboardManager
+    val clip = android.content.ClipData.newPlainText(label, text)
+    clipboard?.setPrimaryClip(clip)
+    Toast.makeText(context, successToast, Toast.LENGTH_SHORT).show()
+    return true
+  }
+
   fun getSecureFlagPolicy(): androidx.compose.ui.window.SecureFlagPolicy {
-    return if (isAdminSession || isDeviceEmulator()) {
+    return if (isAdminSession) {
       androidx.compose.ui.window.SecureFlagPolicy.SecureOff
     } else {
       androidx.compose.ui.window.SecureFlagPolicy.SecureOn
@@ -173,8 +226,7 @@ object AppSecurityManager {
    * Checks Android NetworkCapabilities for TRANSPORT_VPN and inspects network interfaces.
    */
   fun isVpnConnected(context: Context): Boolean {
-    // Bypass VPN block for emulators and browser preview environments
-    if (isDeviceEmulator()) return false
+    if (isAdminSession) return false
 
     try {
       val cm = context.getSystemService(Context.CONNECTIVITY_SERVICE) as? ConnectivityManager
@@ -200,20 +252,30 @@ object AppSecurityManager {
     return false
   }
 
+  fun recordKnownMaxTime(context: Context, timeMillis: Long) {
+    if (timeMillis <= 0L) return
+    try {
+      val prefs = context.getSharedPreferences(PREFS_SECURITY, Context.MODE_PRIVATE)
+      val maxSeen = prefs.getLong("pref_max_seen_time", 0L)
+      if (timeMillis > maxSeen) {
+        prefs.edit().putLong("pref_max_seen_time", timeMillis).apply()
+      }
+    } catch (_: Exception) {}
+  }
+
   /**
    * Anti-Time Tampering Protection.
    * Detects if device clock is rolled back maliciously to bypass trial periods or lockouts.
    */
   fun isTimeTampered(context: Context): Boolean {
-    // Bypass time tampering block for emulators and browser preview environments
-    if (isDeviceEmulator()) return false
+    if (isAdminSession) return false
 
     try {
       val prefs = context.getSharedPreferences(PREFS_SECURITY, Context.MODE_PRIVATE)
       val currentTime = System.currentTimeMillis()
       val maxSeenTime = prefs.getLong("pref_max_seen_time", 0L)
 
-      if (maxSeenTime > 0L && currentTime < (maxSeenTime - 3600_000L)) {
+      if (maxSeenTime > 0L && currentTime < (maxSeenTime - 60_000L)) {
         return true
       }
 
@@ -434,8 +496,12 @@ fun SecurityControlPanelDialog(
 
   Dialog(
     onDismissRequest = onDismiss,
-    properties = DialogProperties(usePlatformDefaultWidth = false)
+    properties = DialogProperties(
+      usePlatformDefaultWidth = false,
+      securePolicy = AppSecurityManager.getSecureFlagPolicy()
+    )
   ) {
+    ConditionalDisableSelection(disabled = !AppSecurityManager.isAdminSession) {
     Surface(
       shape = RoundedCornerShape(24.dp),
       color = Color(0xFFF8FAFC),
@@ -577,7 +643,7 @@ fun SecurityControlPanelDialog(
               }
               Spacer(modifier = Modifier.height(4.dp))
               Text(
-                text = "තිර ඡායාරූප (Screenshots) සහ Screen Video Recording ලබාගැනීම 100%ක් වළක්වයි (FLAG_SECURE).",
+                text = "පරිශීලකයින්ට මුල් තිරය (Home) පමණක් Screenshot ගත හැක. අනෙකුත් සියලුම කොටස්, PDF, සටහන්, Download සහ Screen Recording 100% අවහිරයි (Admin හට නිදහස ඇත).",
                 fontSize = 11.sp,
                 color = Color(0xFF64748B),
                 lineHeight = 15.sp
@@ -708,9 +774,14 @@ fun SecurityControlPanelDialog(
 
             Switch(
               checked = isWatermarkActive,
+              enabled = AppSecurityManager.isAdminSession,
               onCheckedChange = { checked ->
-                isWatermarkActive = checked
-                AppSecurityManager.setDynamicWatermarkEnabled(context, checked)
+                if (AppSecurityManager.isAdminSession) {
+                  isWatermarkActive = checked
+                  AppSecurityManager.setDynamicWatermarkEnabled(context, checked)
+                } else {
+                  Toast.makeText(context, "ආරක්ෂක සැකසුම් වෙනස් කළ හැක්කේ පරිපාලක (Admin) සඳහා පමණි.", Toast.LENGTH_SHORT).show()
+                }
               }
             )
           }
@@ -760,6 +831,7 @@ fun SecurityControlPanelDialog(
         }
       }
     }
+    }
   }
 }
 
@@ -789,7 +861,8 @@ fun VpnSecurityBlockDialog(
     properties = DialogProperties(
       dismissOnBackPress = false,
       dismissOnClickOutside = false,
-      usePlatformDefaultWidth = false
+      usePlatformDefaultWidth = false,
+      securePolicy = AppSecurityManager.getSecureFlagPolicy()
     )
   ) {
     Card(
@@ -894,7 +967,8 @@ fun TimeTamperingSecurityBlockDialog(
     properties = DialogProperties(
       dismissOnBackPress = false,
       dismissOnClickOutside = false,
-      usePlatformDefaultWidth = false
+      usePlatformDefaultWidth = false,
+      securePolicy = AppSecurityManager.getSecureFlagPolicy()
     )
   ) {
     Card(

@@ -21,6 +21,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.window.DialogProperties
 
 // ==============================================================================
 // GEOMETRY STRUCTURED QUESTIONS & RIDERS HUB (ජ්‍යාමිතිය ව්‍යුහගත විසඳුම්)
@@ -671,7 +672,8 @@ fun GeometryStructuredQuestionsHubScreen(
         ) {
           Text("තේරුණා (Close)", fontSize = 12.sp)
         }
-      }
+      },
+      properties = DialogProperties(securePolicy = AppSecurityManager.getSecureFlagPolicy())
     )
   }
 }

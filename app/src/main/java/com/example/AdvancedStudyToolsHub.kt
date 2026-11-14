@@ -1681,11 +1681,11 @@ fun TriLingualGlossaryScreen(
                   )
                   IconButton(
                     onClick = {
-                      if (AppSecurityManager.canCopyContent(context)) {
-                        clipboardManager.setText(AnnotatedString("${item.sinhalaTerm} (${item.englishTerm}): ${item.definitionSinhala}"))
-                      } else {
-                        Toast.makeText(context, "ආරක්ෂක නීති අනුව සටහන් පිටපත් කිරීම (Copy) අවහිර කර ඇත (Admin Only).", Toast.LENGTH_SHORT).show()
-                      }
+                      AppSecurityManager.copyTextIfAdmin(
+                        context,
+                        "glossary_term",
+                        "${item.sinhalaTerm} (${item.englishTerm}): ${item.definitionSinhala}"
+                      )
                     },
                     modifier = Modifier.size(24.dp)
                   ) {

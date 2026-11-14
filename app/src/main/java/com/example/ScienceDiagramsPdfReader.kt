@@ -119,7 +119,7 @@ fun ScienceDiagramsPdfReaderDialog(
       securePolicy = AppSecurityManager.getSecureFlagPolicy()
     )
   ) {
-    DisableSelection {
+    ConditionalDisableSelection(disabled = !AppSecurityManager.isAdminSession) {
       Surface(
         modifier = Modifier
           .fillMaxSize()
@@ -731,7 +731,10 @@ fun ScienceDiagramsPdfReaderDialog(
 
   // Jump to Page Dialog
   if (showJumpDialog) {
-    Dialog(onDismissRequest = { showJumpDialog = false }) {
+    Dialog(
+      onDismissRequest = { showJumpDialog = false },
+      properties = DialogProperties(securePolicy = AppSecurityManager.getSecureFlagPolicy())
+    ) {
       Card(
         shape = RoundedCornerShape(16.dp),
         colors = CardDefaults.cardColors(containerColor = Color(0xFF1E293B)),
@@ -808,7 +811,10 @@ fun ScienceDiagramsPdfReaderDialog(
 
   // Theme Picker Dialog
   if (showThemeDialog) {
-    Dialog(onDismissRequest = { showThemeDialog = false }) {
+    Dialog(
+      onDismissRequest = { showThemeDialog = false },
+      properties = DialogProperties(securePolicy = AppSecurityManager.getSecureFlagPolicy())
+    ) {
       Card(
         shape = RoundedCornerShape(16.dp),
         colors = CardDefaults.cardColors(containerColor = Color(0xFF1E293B)),

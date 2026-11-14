@@ -231,7 +231,8 @@ fun EyeCareSettingsBottomSheet(
     sheetState = sheetState,
     containerColor = MaterialTheme.colorScheme.surface,
     tonalElevation = 6.dp,
-    shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp)
+    shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp),
+    properties = ModalBottomSheetProperties(securePolicy = AppSecurityManager.getSecureFlagPolicy())
   ) {
     Column(
       modifier = Modifier

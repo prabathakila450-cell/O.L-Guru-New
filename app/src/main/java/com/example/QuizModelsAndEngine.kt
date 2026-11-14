@@ -591,7 +591,8 @@ fun QuizSetsBottomSheet(
   ModalBottomSheet(
     onDismissRequest = onDismiss,
     containerColor = Color.White,
-    shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp)
+    shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp),
+    properties = ModalBottomSheetProperties(securePolicy = AppSecurityManager.getSecureFlagPolicy())
   ) {
     Column(
       modifier = Modifier
@@ -727,7 +728,10 @@ fun QuizEngineDialog(
     onDismissRequest = {
       if (isSubmitted) onDismiss()
     },
-    properties = DialogProperties(usePlatformDefaultWidth = false)
+    properties = DialogProperties(
+      usePlatformDefaultWidth = false,
+      securePolicy = AppSecurityManager.getSecureFlagPolicy()
+    )
   ) {
     Surface(
       shape = RoundedCornerShape(16.dp),
@@ -1320,7 +1324,10 @@ fun FlashcardsViewerDialog(
 
   Dialog(
     onDismissRequest = onDismiss,
-    properties = DialogProperties(usePlatformDefaultWidth = false)
+    properties = DialogProperties(
+      usePlatformDefaultWidth = false,
+      securePolicy = AppSecurityManager.getSecureFlagPolicy()
+    )
   ) {
     Card(
       shape = RoundedCornerShape(20.dp),

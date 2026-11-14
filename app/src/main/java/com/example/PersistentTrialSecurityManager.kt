@@ -31,6 +31,7 @@ object PersistentTrialSecurityManager {
   private const val PREFS_NAME = "app_trial_prefs"
   private const val KEY_INSTALL_TIMESTAMP = "install_timestamp"
   private const val KEY_PERMANENTLY_EXPIRED = "trial_permanently_expired"
+  private const val KEY_HAS_REQUESTED_APPROVAL = "trial_has_requested_approval"
   private const val KEY_LAST_SEEN_TIMESTAMP = "last_seen_timestamp"
   private const val KEY_DEVICE_HARDWARE_ID = "device_hardware_id"
 
@@ -42,6 +43,14 @@ object PersistentTrialSecurityManager {
   @Volatile
   private var lastExternalSyncTimestamp: Long = 0L
   private const val EXTERNAL_SYNC_INTERVAL_MS = 60_000L
+
+  data class CloudTrialSnapshot(
+    val deviceId: String,
+    val firstInstallTime: Long,
+    val isPermanentlyExpired: Boolean,
+    val hasRequestedApproval: Boolean,
+    val maxSeenTime: Long
+  )
 
   /**
    * Retrieves the constant hardware-level unique identifier for this physical phone/device.
@@ -114,6 +123,7 @@ object PersistentTrialSecurityManager {
             val json = JSONObject(content)
             val installTime = json.optLong("firstInstallTime", 0L)
             val isExpired = json.optBoolean("isPermanentlyExpired", false)
+            val hasRequested = json.optBoolean("hasRequestedApproval", false)
             val lastSeen = json.optLong("lastSeenTime", 0L)
             val hardwareId = json.optString("deviceId", "")
             if (installTime > 0L) {
@@ -121,7 +131,8 @@ object PersistentTrialSecurityManager {
                 firstInstallTime = installTime,
                 isPermanentlyExpired = isExpired,
                 lastSeenTime = lastSeen,
-                deviceId = hardwareId
+                deviceId = hardwareId,
+                hasRequestedApproval = hasRequested
               )
             }
           }
@@ -141,6 +152,7 @@ object PersistentTrialSecurityManager {
       put("deviceId", record.deviceId)
       put("firstInstallTime", record.firstInstallTime)
       put("isPermanentlyExpired", record.isPermanentlyExpired)
+      put("hasRequestedApproval", record.hasRequestedApproval)
       put("lastSeenTime", record.lastSeenTime)
       put("updatedAt", System.currentTimeMillis())
     }
@@ -164,8 +176,131 @@ object PersistentTrialSecurityManager {
     val firstInstallTime: Long,
     val isPermanentlyExpired: Boolean,
     val lastSeenTime: Long,
-    val deviceId: String
+    val deviceId: String,
+    val hasRequestedApproval: Boolean = false
   )
+
+  /**
+   * Synchronous fast pre-check before async IO completes.
+   * Returns false on uninitialized launches or expired/locked states to prevent any unlocked grace frame.
+   */
+  fun isTrialActiveFastLocal(context: Context): Boolean {
+    return try {
+      val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+      val installTime = prefs.getLong(KEY_INSTALL_TIMESTAMP, 0L)
+      if (installTime <= 0L) return false
+      if (prefs.getBoolean(KEY_PERMANENTLY_EXPIRED, false)) return false
+      if (prefs.getBoolean(KEY_HAS_REQUESTED_APPROVAL, false)) return false
+      val now = System.currentTimeMillis()
+      val lastSeen = prefs.getLong(KEY_LAST_SEEN_TIMESTAMP, installTime)
+      if (now < lastSeen - 60_000L) return false
+      val elapsed = maxOf(now - installTime, lastSeen - installTime)
+      elapsed < TWENTY_FOUR_HOURS_MILLIS
+    } catch (_: Throwable) {
+      false
+    }
+  }
+
+  fun hasRequestedApproval(context: Context): Boolean {
+    val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+    return prefs.getBoolean(KEY_HAS_REQUESTED_APPROVAL, false)
+  }
+
+  fun markApprovalRequested(context: Context) {
+    val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+    val installTime = getOrInitializeInstallTime(context)
+    val hardwareId = getHardwareDeviceId(context)
+    val now = maxOf(System.currentTimeMillis(), prefs.getLong(KEY_LAST_SEEN_TIMESTAMP, installTime))
+    val isExpired = prefs.getBoolean(KEY_PERMANENTLY_EXPIRED, false)
+    prefs.edit()
+      .putBoolean(KEY_HAS_REQUESTED_APPROVAL, true)
+      .putLong(KEY_LAST_SEEN_TIMESTAMP, now)
+      .apply()
+    writeExternalDeviceRecord(
+      context,
+      DeviceRecord(
+        firstInstallTime = installTime,
+        isPermanentlyExpired = isExpired,
+        lastSeenTime = now,
+        deviceId = hardwareId,
+        hasRequestedApproval = true
+      )
+    )
+  }
+
+  fun exportDeviceTrialSnapshot(context: Context): CloudTrialSnapshot {
+    val installTime = getOrInitializeInstallTime(context)
+    val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+    val now = System.currentTimeMillis()
+    val maxSeen = maxOf(now, prefs.getLong(KEY_LAST_SEEN_TIMESTAMP, installTime))
+    val expired = prefs.getBoolean(KEY_PERMANENTLY_EXPIRED, false) ||
+      (maxSeen - installTime) >= TWENTY_FOUR_HOURS_MILLIS
+    if (expired) {
+      prefs.edit().putBoolean(KEY_PERMANENTLY_EXPIRED, true).apply()
+    }
+    return CloudTrialSnapshot(
+      deviceId = getHardwareDeviceId(context),
+      firstInstallTime = installTime,
+      isPermanentlyExpired = expired,
+      hasRequestedApproval = prefs.getBoolean(KEY_HAS_REQUESTED_APPROVAL, false),
+      maxSeenTime = maxSeen
+    )
+  }
+
+  fun applyCloudTrialRecord(
+    context: Context,
+    cloudFirstInstallTime: Long?,
+    cloudPermanentlyExpired: Boolean,
+    cloudHasRequestedApproval: Boolean,
+    cloudMaxSeenTime: Long?
+  ): CloudTrialSnapshot {
+    val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+    val localInstall = getOrInitializeInstallTime(context)
+    val mergedInstall = if (cloudFirstInstallTime != null && cloudFirstInstallTime > 0L) {
+      minOf(localInstall, cloudFirstInstallTime)
+    } else {
+      localInstall
+    }
+    val now = System.currentTimeMillis()
+    val localMaxSeen = prefs.getLong(KEY_LAST_SEEN_TIMESTAMP, mergedInstall)
+    val mergedMaxSeen = maxOf(localMaxSeen, cloudMaxSeenTime ?: 0L, now)
+    AppSecurityManager.recordKnownMaxTime(context, mergedMaxSeen)
+
+    val clockRolledBack = cloudMaxSeenTime != null && cloudMaxSeenTime > 0L && now < (cloudMaxSeenTime - 60_000L)
+    val mergedRequested = prefs.getBoolean(KEY_HAS_REQUESTED_APPROVAL, false) || cloudHasRequestedApproval
+    val mergedExpired = prefs.getBoolean(KEY_PERMANENTLY_EXPIRED, false) ||
+      cloudPermanentlyExpired ||
+      clockRolledBack ||
+      (mergedMaxSeen - mergedInstall) >= TWENTY_FOUR_HOURS_MILLIS
+
+    val hardwareId = getHardwareDeviceId(context)
+    prefs.edit()
+      .putLong(KEY_INSTALL_TIMESTAMP, mergedInstall)
+      .putBoolean(KEY_PERMANENTLY_EXPIRED, mergedExpired)
+      .putBoolean(KEY_HAS_REQUESTED_APPROVAL, mergedRequested)
+      .putLong(KEY_LAST_SEEN_TIMESTAMP, mergedMaxSeen)
+      .putString(KEY_DEVICE_HARDWARE_ID, hardwareId)
+      .apply()
+
+    writeExternalDeviceRecord(
+      context,
+      DeviceRecord(
+        firstInstallTime = mergedInstall,
+        isPermanentlyExpired = mergedExpired,
+        lastSeenTime = mergedMaxSeen,
+        deviceId = hardwareId,
+        hasRequestedApproval = mergedRequested
+      )
+    )
+
+    return CloudTrialSnapshot(
+      deviceId = hardwareId,
+      firstInstallTime = mergedInstall,
+      isPermanentlyExpired = mergedExpired,
+      hasRequestedApproval = mergedRequested,
+      maxSeenTime = mergedMaxSeen
+    )
+  }
 
   /**
    * Initializes or retrieves the permanent installation timestamp.
@@ -177,6 +312,7 @@ object PersistentTrialSecurityManager {
 
     var prefsInstallTime = prefs.getLong(KEY_INSTALL_TIMESTAMP, 0L)
     var prefsExpired = prefs.getBoolean(KEY_PERMANENTLY_EXPIRED, false)
+    var prefsRequested = prefs.getBoolean(KEY_HAS_REQUESTED_APPROVAL, false)
     var prefsLastSeen = prefs.getLong(KEY_LAST_SEEN_TIMESTAMP, 0L)
 
     val now = System.currentTimeMillis()
@@ -192,6 +328,9 @@ object PersistentTrialSecurityManager {
         if (extRecord.isPermanentlyExpired) {
           prefsExpired = true
         }
+        if (extRecord.hasRequestedApproval) {
+          prefsRequested = true
+        }
         if (extRecord.lastSeenTime > prefsLastSeen) {
           prefsLastSeen = extRecord.lastSeenTime
         }
@@ -204,10 +343,13 @@ object PersistentTrialSecurityManager {
       prefsLastSeen = now
     }
 
+    AppSecurityManager.recordKnownMaxTime(context, maxOf(now, prefsLastSeen))
+
     // Save and sync back to SharedPreferences (fast) and throttle external storage writes
     prefs.edit()
       .putLong(KEY_INSTALL_TIMESTAMP, prefsInstallTime)
       .putBoolean(KEY_PERMANENTLY_EXPIRED, prefsExpired)
+      .putBoolean(KEY_HAS_REQUESTED_APPROVAL, prefsRequested)
       .putLong(KEY_LAST_SEEN_TIMESTAMP, maxOf(now, prefsLastSeen))
       .putString(KEY_DEVICE_HARDWARE_ID, hardwareId)
       .apply()
@@ -220,7 +362,8 @@ object PersistentTrialSecurityManager {
           firstInstallTime = prefsInstallTime,
           isPermanentlyExpired = prefsExpired,
           lastSeenTime = maxOf(now, prefsLastSeen),
-          deviceId = hardwareId
+          deviceId = hardwareId,
+          hasRequestedApproval = prefsRequested
         )
       )
     }
@@ -231,12 +374,15 @@ object PersistentTrialSecurityManager {
   /**
    * Checks if the 24-hour free trial is currently active.
    * Returns false if 24 hours have elapsed, if permanently marked expired,
-   * or if anti-clock rollback tampering is detected.
+   * if approval was already requested, or if anti-clock rollback tampering is detected.
    */
   fun isTrialActive(context: Context): Boolean {
     val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
     if (prefs.getBoolean(KEY_PERMANENTLY_EXPIRED, false)) return false
+    if (prefs.getBoolean(KEY_HAS_REQUESTED_APPROVAL, false)) return false
     val installTime = getOrInitializeInstallTime(context)
+    if (prefs.getBoolean(KEY_PERMANENTLY_EXPIRED, false)) return false
+    if (prefs.getBoolean(KEY_HAS_REQUESTED_APPROVAL, false)) return false
     val now = System.currentTimeMillis()
     val lastSeen = prefs.getLong(KEY_LAST_SEEN_TIMESTAMP, installTime)
 
@@ -262,8 +408,9 @@ object PersistentTrialSecurityManager {
   fun markTrialPermanentlyExpired(context: Context) {
     val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
     val installTime = prefs.getLong(KEY_INSTALL_TIMESTAMP, System.currentTimeMillis())
+    val hasRequested = prefs.getBoolean(KEY_HAS_REQUESTED_APPROVAL, false)
     val hardwareId = getHardwareDeviceId(context)
-    val now = System.currentTimeMillis()
+    val now = maxOf(System.currentTimeMillis(), prefs.getLong(KEY_LAST_SEEN_TIMESTAMP, installTime))
 
     prefs.edit()
       .putBoolean(KEY_PERMANENTLY_EXPIRED, true)
@@ -276,7 +423,8 @@ object PersistentTrialSecurityManager {
         firstInstallTime = installTime,
         isPermanentlyExpired = true,
         lastSeenTime = now,
-        deviceId = hardwareId
+        deviceId = hardwareId,
+        hasRequestedApproval = hasRequested
       )
     )
   }

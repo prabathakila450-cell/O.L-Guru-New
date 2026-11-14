@@ -1314,12 +1314,12 @@ fun VoiceDoubtSolverScreen(
                   // Copy button (Admin only)
                   IconButton(
                     onClick = {
-                      if (AppSecurityManager.canCopyContent(context)) {
-                        clipboard.setText(AnnotatedString("${activeDoubt.questionSinhala}\n\n${activeDoubt.detailedVoiceExplanation}"))
-                        Toast.makeText(context, "පැහැදිලි කිරීම පිටපත් විය!", Toast.LENGTH_SHORT).show()
-                      } else {
-                        Toast.makeText(context, "ආරක්ෂක නීති අනුව සටහන් පිටපත් කිරීම (Copy) අවහිර කර ඇත (Admin Only).", Toast.LENGTH_SHORT).show()
-                      }
+                      AppSecurityManager.copyTextIfAdmin(
+                        context,
+                        "voice_doubt",
+                        "${activeDoubt.questionSinhala}\n\n${activeDoubt.detailedVoiceExplanation}",
+                        "පැහැදිලි කිරීම පිටපත් විය!"
+                      )
                     },
                     modifier = Modifier.size(28.dp)
                   ) {

@@ -1272,11 +1272,13 @@ fun OlTenYearOriginalPastPapersHubScreen(
             sites.forEach { (name, url, desc) ->
               Surface(
                 onClick = {
-                  try {
-                    val intent = Intent(Intent.ACTION_VIEW, Uri.parse(url))
-                    context.startActivity(intent)
-                  } catch (e: Exception) {
-                    Toast.makeText(context, "වෙබ් අඩවිය විවෘත කළ නොහැකි විය", Toast.LENGTH_SHORT).show()
+                  if (AppSecurityManager.canDownloadOrOpenExternal(context)) {
+                    try {
+                      val intent = Intent(Intent.ACTION_VIEW, Uri.parse(url))
+                      context.startActivity(intent)
+                    } catch (e: Exception) {
+                      Toast.makeText(context, "වෙබ් අඩවිය විවෘත කළ නොහැකි විය", Toast.LENGTH_SHORT).show()
+                    }
                   }
                 },
                 shape = RoundedCornerShape(8.dp),

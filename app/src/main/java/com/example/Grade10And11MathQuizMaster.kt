@@ -2433,7 +2433,10 @@ fun MathQuizActiveFullscreenExam(
 
   // Question Jumper Dialog
   if (showGridNavDialog) {
-    Dialog(onDismissRequest = { showGridNavDialog = false }) {
+    Dialog(
+      onDismissRequest = { showGridNavDialog = false },
+      properties = DialogProperties(securePolicy = AppSecurityManager.getSecureFlagPolicy())
+    ) {
       Card(
         shape = RoundedCornerShape(20.dp),
         colors = CardDefaults.cardColors(containerColor = Color.White),
@@ -2521,7 +2524,8 @@ fun MathQuizActiveFullscreenExam(
         }) {
           Text("මුළුමනින්ම ඉවත් වන්න", color = Color(0xFFDC2626))
         }
-      }
+      },
+      properties = DialogProperties(securePolicy = AppSecurityManager.getSecureFlagPolicy())
     )
   }
 }

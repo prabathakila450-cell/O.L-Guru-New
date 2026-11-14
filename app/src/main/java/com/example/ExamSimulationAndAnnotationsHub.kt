@@ -2124,7 +2124,8 @@ fun ActiveMockExamSession(
         TextButton(onClick = { showConfirmSubmitDialog = false }) {
           Text("තවදුරටත් ලියන්න")
         }
-      }
+      },
+      properties = DialogProperties(securePolicy = AppSecurityManager.getSecureFlagPolicy())
     )
   }
 }

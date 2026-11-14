@@ -1264,12 +1264,12 @@ fun EnglishVoiceDoubtAssistantScreen(
               // Copy Rule (Admin only)
               IconButton(
                 onClick = {
-                  if (AppSecurityManager.canCopyContent(context)) {
-                    clipboardManager.setText(AnnotatedString("${activeDoubt.questionEnglish}\n${activeDoubt.ruleOrFormula}\n${activeDoubt.examTip}"))
-                    Toast.makeText(context, "ඉංග්‍රීසි නීතිය හා සටහන Copy විය", Toast.LENGTH_SHORT).show()
-                  } else {
-                    Toast.makeText(context, "ආරක්ෂක නීති අනුව සටහන් පිටපත් කිරීම (Copy) අවහිර කර ඇත (Admin Only).", Toast.LENGTH_SHORT).show()
-                  }
+                  AppSecurityManager.copyTextIfAdmin(
+                    context,
+                    "english_doubt",
+                    "${activeDoubt.questionEnglish}\n${activeDoubt.ruleOrFormula}\n${activeDoubt.examTip}",
+                    "ඉංග්‍රීසි නීතිය හා සටහන Copy විය"
+                  )
                 },
                 modifier = Modifier.size(30.dp)
               ) {
@@ -1462,12 +1462,12 @@ fun EnglishVoiceDoubtAssistantScreen(
                     fontWeight = FontWeight.Bold,
                     color = Color(0xFF2563EB),
                     modifier = Modifier.clickable {
-                      if (AppSecurityManager.canCopyContent(context)) {
-                        clipboardManager.setText(AnnotatedString(activeDoubt.ruleOrFormula))
-                        Toast.makeText(context, "සූත්‍රය Copy විය", Toast.LENGTH_SHORT).show()
-                      } else {
-                        Toast.makeText(context, "ආරක්ෂක නීති අනුව සටහන් පිටපත් කිරීම (Copy) අවහිර කර ඇත (Admin Only).", Toast.LENGTH_SHORT).show()
-                      }
+                      AppSecurityManager.copyTextIfAdmin(
+                        context,
+                        "english_formula",
+                        activeDoubt.ruleOrFormula,
+                        "සූත්‍රය Copy විය"
+                      )
                     }
                   )
                 }

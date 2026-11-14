@@ -374,8 +374,7 @@ fun SentencePuzzleScreen(
                           }
                           IconButton(
                             onClick = {
-                              clipboardManager.setText(AnnotatedString(puzzle.correctSentence))
-                              Toast.makeText(context, "පිටපත් කරගන්නා ලදී (Copied)", Toast.LENGTH_SHORT).show()
+                              AppSecurityManager.copyTextIfAdmin(context, "sentence_puzzle", puzzle.correctSentence, "පිටපත් කරගන්නා ලදී (Copied)")
                             },
                             modifier = Modifier.size(28.dp)
                           ) {

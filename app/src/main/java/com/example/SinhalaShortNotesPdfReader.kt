@@ -125,7 +125,7 @@ fun SinhalaShortNotesPdfReaderDialog(
       securePolicy = AppSecurityManager.getSecureFlagPolicy()
     )
   ) {
-    DisableSelection {
+    ConditionalDisableSelection(disabled = !AppSecurityManager.isAdminSession) {
       Surface(
         modifier = Modifier
           .fillMaxSize()
@@ -614,12 +614,9 @@ fun SinhalaShortNotesPdfReaderDialog(
 
                       IconButton(
                         onClick = {
-                          if (AppSecurityManager.canCopyContent(context)) {
-                            val allText = page.modelAnswerParagraphs.joinToString("\n\n")
-                            clipboardManager.setText(AnnotatedString(allText))
+                          val allText = page.modelAnswerParagraphs.joinToString("\n\n")
+                          if (AppSecurityManager.copyTextIfAdmin(context, "model_answer", allText, "පිටපත් විය!")) {
                             showCopiedToast = true
-                          } else {
-                            Toast.makeText(context, "ආරක්ෂක නීති අනුව සටහන් පිටපත් කිරීම (Copy) අවහිර කර ඇත (Admin Only).", Toast.LENGTH_SHORT).show()
                           }
                         },
                         modifier = Modifier.size(30.dp)
@@ -824,7 +821,10 @@ fun SinhalaShortNotesPdfReaderDialog(
 
   // Theme Picker Dialog
   if (showThemeDialog) {
-    Dialog(onDismissRequest = { showThemeDialog = false }) {
+    Dialog(
+      onDismissRequest = { showThemeDialog = false },
+      properties = DialogProperties(securePolicy = AppSecurityManager.getSecureFlagPolicy())
+    ) {
       Surface(
         shape = RoundedCornerShape(16.dp),
         color = Color(0xFF0F172A),

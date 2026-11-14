@@ -185,8 +185,7 @@ fun ActivePassive500Screen(
                 IconButton(
                   onClick = {
                     val txt = "Active: ${item.activeSentence}\nSinhala: ${item.activeSinhala}\nPassive: ${item.passiveSentence}\nSinhala: ${item.passiveSinhala}"
-                    clipboardManager.setText(AnnotatedString(txt))
-                    Toast.makeText(context, "පිටපත් කරගන්න ලදී (Copied)", Toast.LENGTH_SHORT).show()
+                    AppSecurityManager.copyTextIfAdmin(context, "active_passive", txt, "පිටපත් කරගන්න ලදී (Copied)")
                   },
                   modifier = Modifier.size(24.dp)
                 ) {

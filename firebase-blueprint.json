@@ -24,6 +24,16 @@
         "status": { "type": "string" },
         "timestamp": { "type": "timestamp" }
       }
+    },
+    "TrialDevice": {
+      "properties": {
+        "deviceId": { "type": "string" },
+        "firstInstallTime": { "type": "number" },
+        "isPermanentlyExpired": { "type": "boolean" },
+        "hasRequestedApproval": { "type": "boolean" },
+        "maxSeenTime": { "type": "number" },
+        "updatedAt": { "type": "number" }
+      }
     }
   }
 }

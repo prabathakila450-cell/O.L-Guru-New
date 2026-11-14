@@ -36,6 +36,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.window.DialogProperties
 import java.util.Locale
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -84,8 +85,7 @@ fun TenseComparisonScreen(
   }
 
   fun copyToClipboard(label: String, text: String) {
-    clipboardManager.setText(AnnotatedString(text))
-    Toast.makeText(context, "$label කොපි කරගන්නා ලදී!", Toast.LENGTH_SHORT).show()
+    AppSecurityManager.copyTextIfAdmin(context, label, text, "$label කොපි කරගන්නා ලදී!")
   }
 
   BackHandler {
@@ -527,7 +527,8 @@ fun TenseComparisonScreen(
         TextButton(onClick = { showCategorySelectorDialog = false }) {
           Text("වසන්න")
         }
-      }
+      },
+      properties = DialogProperties(securePolicy = AppSecurityManager.getSecureFlagPolicy())
     )
   }
 }

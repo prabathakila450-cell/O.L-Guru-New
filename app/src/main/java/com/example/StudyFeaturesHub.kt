@@ -426,7 +426,10 @@ fun TargetedTopicFocusedNoteDialog(
 ) {
   Dialog(
     onDismissRequest = onDismiss,
-    properties = DialogProperties(usePlatformDefaultWidth = false)
+    properties = DialogProperties(
+      usePlatformDefaultWidth = false,
+      securePolicy = AppSecurityManager.getSecureFlagPolicy()
+    )
   ) {
     Surface(
       shape = RoundedCornerShape(20.dp),
@@ -1419,7 +1422,8 @@ fun StructuredEssayHubScreen(
         TextButton(onClick = { showSetsOverviewDialog = false }) {
           Text("වසන්න (Close)", fontWeight = FontWeight.Bold)
         }
-      }
+      },
+      properties = DialogProperties(securePolicy = AppSecurityManager.getSecureFlagPolicy())
     )
   }
 
@@ -1977,7 +1981,8 @@ fun FullScreenStructuredQuestionReader(
     onDismissRequest = onDismiss,
     properties = DialogProperties(
       usePlatformDefaultWidth = false,
-      decorFitsSystemWindows = false
+      decorFitsSystemWindows = false,
+      securePolicy = AppSecurityManager.getSecureFlagPolicy()
     )
   ) {
     Surface(
@@ -3392,12 +3397,7 @@ fun FormulaCard(
         Row(verticalAlignment = Alignment.CenterVertically) {
           IconButton(
             onClick = {
-              if (AppSecurityManager.canCopyContent(context)) {
-                clipboardManager.setText(AnnotatedString(item.formula))
-                Toast.makeText(context, "සූත්‍රය පිටපත් විය (Copied)", Toast.LENGTH_SHORT).show()
-              } else {
-                Toast.makeText(context, "ආරක්ෂක නීති අනුව සටහන් පිටපත් කිරීම (Copy) අවහිර කර ඇත (Admin Only).", Toast.LENGTH_SHORT).show()
-              }
+              AppSecurityManager.copyTextIfAdmin(context, "formula", item.formula, "සූත්‍රය පිටපත් විය (Copied)")
             },
             modifier = Modifier.size(28.dp)
           ) {
@@ -3554,7 +3554,8 @@ fun FullScreenFormulaReader(
     onDismissRequest = onDismiss,
     properties = DialogProperties(
       usePlatformDefaultWidth = false,
-      decorFitsSystemWindows = false
+      decorFitsSystemWindows = false,
+      securePolicy = AppSecurityManager.getSecureFlagPolicy()
     )
   ) {
     Surface(
@@ -3612,12 +3613,7 @@ fun FullScreenFormulaReader(
             Row(verticalAlignment = Alignment.CenterVertically) {
               IconButton(
                 onClick = {
-                  if (AppSecurityManager.canCopyContent(context)) {
-                    clipboardManager.setText(AnnotatedString(item.formula))
-                    Toast.makeText(context, "සූත්‍රය පිටපත් විය (Copied)", Toast.LENGTH_SHORT).show()
-                  } else {
-                    Toast.makeText(context, "ආරක්ෂක නීති අනුව සටහන් පිටපත් කිරීම (Copy) අවහිර කර ඇත (Admin Only).", Toast.LENGTH_SHORT).show()
-                  }
+                  AppSecurityManager.copyTextIfAdmin(context, "formula", item.formula, "සූත්‍රය පිටපත් විය (Copied)")
                 },
                 modifier = Modifier.size(32.dp)
               ) {
@@ -3729,12 +3725,7 @@ fun FullScreenFormulaReader(
                 )
                 OutlinedButton(
                   onClick = {
-                    if (AppSecurityManager.canCopyContent(context)) {
-                      clipboardManager.setText(AnnotatedString(item.formula))
-                      Toast.makeText(context, "සූත්‍රය පිටපත් විය (Copied)", Toast.LENGTH_SHORT).show()
-                    } else {
-                      Toast.makeText(context, "ආරක්ෂක නීති අනුව සටහන් පිටපත් කිරීම (Copy) අවහිර කර ඇත (Admin Only).", Toast.LENGTH_SHORT).show()
-                    }
+                    AppSecurityManager.copyTextIfAdmin(context, "formula", item.formula, "සූත්‍රය පිටපත් විය (Copied)")
                   },
                   shape = RoundedCornerShape(8.dp),
                   contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp),

@@ -410,17 +410,12 @@ fun AiSmartAssistantSection(
 
           IconButton(
             onClick = {
-              if (AppSecurityManager.canCopyContent(context)) {
-                val textToCopy = buildString {
-                  appendLine(activeChapter.title)
-                  appendLine("පිටු: ${activeChapter.page_start} - ${activeChapter.page_end}")
-                  activeChapter.summary_bullets.forEach { appendLine("• $it") }
-                }
-                clipboardManager.setText(AnnotatedString(textToCopy))
-                Toast.makeText(context, "📋 සාරාංශය පිටපත් කරන ලදී!", Toast.LENGTH_SHORT).show()
-              } else {
-                Toast.makeText(context, "ආරක්ෂක නීති අනුව සටහන් පිටපත් කිරීම (Copy) අවහිර කර ඇත (Admin Only).", Toast.LENGTH_SHORT).show()
+              val textToCopy = buildString {
+                appendLine(activeChapter.title)
+                appendLine("පිටු: ${activeChapter.page_start} - ${activeChapter.page_end}")
+                activeChapter.summary_bullets.forEach { appendLine("• $it") }
               }
+              AppSecurityManager.copyTextIfAdmin(context, "chapter_summary", textToCopy, "📋 සාරාංශය පිටපත් කරන ලදී!")
             },
             modifier = Modifier.size(32.dp)
           ) {

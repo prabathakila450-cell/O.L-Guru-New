@@ -3559,7 +3559,8 @@ fun SyllabusDetectionAndContentScreen(
         ) {
           Text("නැත (No)", color = Color(0xFF0F172A), fontSize = 12.sp)
         }
-      }
+      },
+      properties = DialogProperties(securePolicy = AppSecurityManager.getSecureFlagPolicy())
     )
   }
 
@@ -4657,7 +4658,8 @@ fun SyllabusDetectionAndContentScreen(
         TextButton(onClick = { showAttachDrivePdfDialog = false }) {
           Text("අවලංගුයි")
         }
-      }
+      },
+      properties = DialogProperties(securePolicy = AppSecurityManager.getSecureFlagPolicy())
     )
   }
 }

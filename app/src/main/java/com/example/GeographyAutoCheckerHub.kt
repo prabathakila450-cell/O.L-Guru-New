@@ -827,7 +827,10 @@ private fun GeoPdfViewerDialog(
 ) {
     Dialog(
         onDismissRequest = onDismiss,
-        properties = DialogProperties(usePlatformDefaultWidth = false)
+        properties = DialogProperties(
+            usePlatformDefaultWidth = false,
+            securePolicy = AppSecurityManager.getSecureFlagPolicy()
+        )
     ) {
         Surface(
             modifier = Modifier.fillMaxSize(),
@@ -865,13 +868,37 @@ private fun GeoPdfViewerDialog(
                 AndroidView(
                     factory = { context ->
                         WebView(context).apply {
+                            isLongClickable = AppSecurityManager.isAdminSession
+                            isHapticFeedbackEnabled = AppSecurityManager.isAdminSession
+                            setOnLongClickListener { !AppSecurityManager.isAdminSession }
                             settings.javaScriptEnabled = true
                             settings.domStorageEnabled = true
                             settings.loadWithOverviewMode = true
                             settings.useWideViewPort = true
                             settings.builtInZoomControls = true
                             settings.displayZoomControls = false
-                            webViewClient = WebViewClient()
+                            setDownloadListener { _, _, _, _, _ ->
+                                AppSecurityManager.canDownloadOrOpenExternal(context)
+                            }
+                            webViewClient = object : WebViewClient() {
+                                override fun shouldOverrideUrlLoading(view: WebView?, request: android.webkit.WebResourceRequest?): Boolean {
+                                    val dest = request?.url?.toString() ?: ""
+                                    if (!AppSecurityManager.isAdminSession && (dest.contains("export=download", ignoreCase = true) || dest.contains("&download=", ignoreCase = true))) {
+                                        android.widget.Toast.makeText(context, "🔒 PDF භාගත කිරීම (Download) අවහිර කර ඇත!", android.widget.Toast.LENGTH_SHORT).show()
+                                        return true
+                                    }
+                                    return false
+                                }
+                                override fun onPageFinished(view: WebView?, url: String?) {
+                                    super.onPageFinished(view, url)
+                                    if (!AppSecurityManager.isAdminSession) {
+                                        view?.evaluateJavascript(
+                                            "javascript:(function(){var s=document.createElement('style');s.innerHTML='div[aria-label=\"Download\"],div[aria-label=\"Print\"],div[aria-label=\"Pop-out\"],.ndfHFb-c4YZDc-Wrql6b,button[title=\"Download\"],button[title=\"Print\"]{display:none!important;pointer-events:none!important;}';(document.head||document.documentElement).appendChild(s);document.documentElement.style.webkitUserSelect='none';document.documentElement.style.userSelect='none';document.addEventListener('copy',function(e){e.preventDefault();},true);document.addEventListener('cut',function(e){e.preventDefault();},true);document.addEventListener('contextmenu',function(e){e.preventDefault();},true);})()",
+                                            null
+                                        )
+                                    }
+                                }
+                            }
                             loadUrl(pdfUrl)
                         }
                     },
@@ -1130,7 +1157,10 @@ fun GeoQaFlashcardSection(currentGrade: String) {
 fun GeoProgressDialog(onDismiss: () -> Unit) {
     Dialog(
         onDismissRequest = onDismiss,
-        properties = DialogProperties(usePlatformDefaultWidth = false)
+        properties = DialogProperties(
+            usePlatformDefaultWidth = false,
+            securePolicy = AppSecurityManager.getSecureFlagPolicy()
+        )
     ) {
         Surface(
             modifier = Modifier
@@ -1207,7 +1237,10 @@ fun GeoProgressDialog(onDismiss: () -> Unit) {
 fun GeoSyllabusDialog(onDismiss: () -> Unit) {
     Dialog(
         onDismissRequest = onDismiss,
-        properties = DialogProperties(usePlatformDefaultWidth = false)
+        properties = DialogProperties(
+            usePlatformDefaultWidth = false,
+            securePolicy = AppSecurityManager.getSecureFlagPolicy()
+        )
     ) {
         Surface(
             modifier = Modifier

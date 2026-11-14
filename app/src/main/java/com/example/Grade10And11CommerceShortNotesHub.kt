@@ -27,6 +27,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 
 enum class CommerceGradeFilter(val labelSinhala: String) {
   ALL("සියල්ල (10 & 11)"),
@@ -1091,7 +1092,8 @@ fun Grade10And11CommerceShortNotesHubScreen(
         TextButton(onClick = { selectedChapterDetail = null }) {
           Text("වසන්න")
         }
-      }
+      },
+      properties = DialogProperties(securePolicy = AppSecurityManager.getSecureFlagPolicy())
     )
   }
 
@@ -1257,7 +1259,8 @@ fun AccountingEquationCalculatorDialog(onDismiss: () -> Unit) {
       Button(onClick = onDismiss, colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF059669))) {
         Text("හරි")
       }
-    }
+    },
+    properties = DialogProperties(securePolicy = AppSecurityManager.getSecureFlagPolicy())
   )
 }
 
@@ -1276,7 +1279,10 @@ fun DoubleEntryBatchesPracticeDialog(onDismiss: () -> Unit) {
 
   val challenge = batchChallenges.getOrNull(selectedChallengeIndex)
 
-  Dialog(onDismissRequest = onDismiss) {
+  Dialog(
+    onDismissRequest = onDismiss,
+    properties = DialogProperties(securePolicy = AppSecurityManager.getSecureFlagPolicy())
+  ) {
     Surface(
       shape = RoundedCornerShape(16.dp),
       color = Color.White,

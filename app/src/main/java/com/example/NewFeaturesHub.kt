@@ -50,6 +50,7 @@ import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.window.DialogProperties
 import androidx.core.content.ContextCompat
 import com.example.ui.theme.BluePrimary
 import kotlinx.coroutines.delay
@@ -455,7 +456,8 @@ fun CountdownAndPlannerScreen(
         TextButton(onClick = { showAddTaskDialog = false }) {
           Text("අවලංගු කරන්න")
         }
-      }
+      },
+      properties = DialogProperties(securePolicy = AppSecurityManager.getSecureFlagPolicy())
     )
   }
 }
@@ -1291,7 +1293,8 @@ fun InteractiveFlashcardsScreen(
             color = if (isDarkMode) Color(0xFF38BDF8) else Color(0xFF15803D)
           )
         }
-      }
+      },
+      properties = DialogProperties(securePolicy = AppSecurityManager.getSecureFlagPolicy())
     )
   }
 }

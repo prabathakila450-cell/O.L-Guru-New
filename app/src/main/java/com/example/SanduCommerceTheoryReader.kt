@@ -89,7 +89,7 @@ fun SanduCommerceTheoryReaderDialog(
       securePolicy = AppSecurityManager.getSecureFlagPolicy()
     )
   ) {
-    androidx.compose.foundation.text.selection.DisableSelection {
+    ConditionalDisableSelection(disabled = !AppSecurityManager.isAdminSession) {
       Surface(
         modifier = Modifier.fillMaxSize(),
         color = bgColor
@@ -834,7 +834,8 @@ fun SanduCommerceTheoryReaderDialog(
         TextButton(onClick = { showJumpDialog = false }) {
           Text("වසන්න", fontWeight = FontWeight.Bold)
         }
-      }
+      },
+      properties = DialogProperties(securePolicy = AppSecurityManager.getSecureFlagPolicy())
     )
   }
 }

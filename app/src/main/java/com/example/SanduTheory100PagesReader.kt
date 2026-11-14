@@ -96,7 +96,7 @@ fun SanduTheory100PagesReaderDialog(
       securePolicy = AppSecurityManager.getSecureFlagPolicy()
     )
   ) {
-    androidx.compose.foundation.text.selection.DisableSelection {
+    ConditionalDisableSelection(disabled = !AppSecurityManager.isAdminSession) {
       Surface(
         modifier = Modifier.fillMaxSize(),
         color = bgColor

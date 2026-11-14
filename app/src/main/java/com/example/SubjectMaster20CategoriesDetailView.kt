@@ -351,12 +351,12 @@ fun SubjectMaster20CategoriesDetailView(
 
                   IconButton(
                     onClick = {
-                      if (AppSecurityManager.canCopyContent(context)) {
-                        clipboardManager.setText(AnnotatedString("${point.title}\n${point.detail}\n💡 ${point.examHighlight}"))
-                        Toast.makeText(context, "පිටපත් කරගන්නා ලදී (Copied)", Toast.LENGTH_SHORT).show()
-                      } else {
-                        Toast.makeText(context, "ආරක්ෂක නීති අනුව සටහන් පිටපත් කිරීම (Copy) අවහිර කර ඇත (Admin Only).", Toast.LENGTH_SHORT).show()
-                      }
+                      AppSecurityManager.copyTextIfAdmin(
+                        context,
+                        "subject_point",
+                        "${point.title}\n${point.detail}\n💡 ${point.examHighlight}",
+                        "පිටපත් කරගන්නා ලදී (Copied)"
+                      )
                     },
                     modifier = Modifier.size(28.dp)
                   ) {

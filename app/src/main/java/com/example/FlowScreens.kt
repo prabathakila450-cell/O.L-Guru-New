@@ -38,6 +38,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.window.DialogProperties
 import com.example.ui.theme.*
 
 data class SubjectSpecialInfo(
@@ -1736,7 +1737,8 @@ fun SubjectContentScreen(
         ) {
           Text("නැත (No)", color = NeutralDark, fontSize = 12.sp)
         }
-      }
+      },
+      properties = DialogProperties(securePolicy = AppSecurityManager.getSecureFlagPolicy())
     )
   }
 

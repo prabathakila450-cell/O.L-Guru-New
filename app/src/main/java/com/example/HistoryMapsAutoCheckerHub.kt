@@ -1558,7 +1558,10 @@ fun InteractiveMapCanvasView(
 fun HistoryMapRulesDialog(onDismiss: () -> Unit) {
   Dialog(
     onDismissRequest = onDismiss,
-    properties = DialogProperties(usePlatformDefaultWidth = false)
+    properties = DialogProperties(
+      usePlatformDefaultWidth = false,
+      securePolicy = AppSecurityManager.getSecureFlagPolicy()
+    )
   ) {
     Surface(
       shape = RoundedCornerShape(20.dp),

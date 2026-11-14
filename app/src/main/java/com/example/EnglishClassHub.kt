@@ -1593,24 +1593,28 @@ fun EnglishMasterClassScreen(
                 Text("PDF කියවන්න 🚀", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = Color(0xFF78350F))
               }
 
-              OutlinedButton(
-                onClick = {
-                  try {
-                    val browserIntent = Intent(Intent.ACTION_VIEW, Uri.parse(defaultEnglishDriveUrl))
-                    context.startActivity(browserIntent)
-                  } catch (e: Exception) {
-                    Toast.makeText(context, "Browser විවෘත කළ නොහැක", Toast.LENGTH_SHORT).show()
-                  }
-                },
-                shape = RoundedCornerShape(10.dp),
-                colors = ButtonDefaults.outlinedButtonColors(contentColor = Color(0xFF1E293B)),
-                border = BorderStroke(1.dp, Color(0xFFCBD5E1)),
-                modifier = Modifier.weight(0.9f),
-                contentPadding = PaddingValues(vertical = 10.dp)
-              ) {
-                Icon(Icons.Default.OpenInBrowser, contentDescription = "Browser", tint = Color(0xFF1E293B), modifier = Modifier.size(15.dp))
-                Spacer(modifier = Modifier.width(4.dp))
-                Text("Browser", fontSize = 11.sp, color = Color(0xFF1E293B))
+              if (AppSecurityManager.isAdminSession) {
+                OutlinedButton(
+                  onClick = {
+                    if (AppSecurityManager.canDownloadOrOpenExternal(context)) {
+                      try {
+                        val browserIntent = Intent(Intent.ACTION_VIEW, Uri.parse(defaultEnglishDriveUrl))
+                        context.startActivity(browserIntent)
+                      } catch (e: Exception) {
+                        Toast.makeText(context, "Browser විවෘත කළ නොහැක", Toast.LENGTH_SHORT).show()
+                      }
+                    }
+                  },
+                  shape = RoundedCornerShape(10.dp),
+                  colors = ButtonDefaults.outlinedButtonColors(contentColor = Color(0xFF1E293B)),
+                  border = BorderStroke(1.dp, Color(0xFFCBD5E1)),
+                  modifier = Modifier.weight(0.9f),
+                  contentPadding = PaddingValues(vertical = 10.dp)
+                ) {
+                  Icon(Icons.Default.OpenInBrowser, contentDescription = "Browser", tint = Color(0xFF1E293B), modifier = Modifier.size(15.dp))
+                  Spacer(modifier = Modifier.width(4.dp))
+                  Text("Browser", fontSize = 11.sp, color = Color(0xFF1E293B))
+                }
               }
             }
 
@@ -1703,12 +1707,12 @@ fun EnglishMasterClassScreen(
                           Text("📄 Model Answer (ආදර්ශ පිළිතුර):", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Color(0xFF1E293B))
                           IconButton(
                             onClick = {
-                              if (AppSecurityManager.canCopyContent(context)) {
-                                clipboardManager.setText(AnnotatedString(tpl.modelFormat))
-                                Toast.makeText(context, "පිටපත් කරගන්නා ලදී (Copied)", Toast.LENGTH_SHORT).show()
-                              } else {
-                                Toast.makeText(context, "ආරක්ෂක නීති අනුව සටහන් පිටපත් කිරීම (Copy) අවහිර කර ඇත (Admin Only).", Toast.LENGTH_SHORT).show()
-                              }
+                              AppSecurityManager.copyTextIfAdmin(
+                                context,
+                                "model_answer",
+                                tpl.modelFormat,
+                                "පිටපත් කරගන්නා ලදී (Copied)"
+                              )
                             },
                             modifier = Modifier.size(24.dp)
                           ) {
@@ -3332,7 +3336,10 @@ fun EnglishMasterClassScreen(
   if (internalShowPdfModal && internalPdfUrl.isNotBlank()) {
     Dialog(
       onDismissRequest = { internalShowPdfModal = false },
-      properties = DialogProperties(usePlatformDefaultWidth = false)
+      properties = DialogProperties(
+        usePlatformDefaultWidth = false,
+        securePolicy = AppSecurityManager.getSecureFlagPolicy()
+      )
     ) {
       Surface(
         modifier = Modifier.fillMaxSize(),
@@ -3354,11 +3361,39 @@ fun EnglishMasterClassScreen(
           AndroidView(
             factory = { ctx ->
               WebView(ctx).apply {
+                isLongClickable = AppSecurityManager.isAdminSession
+                isHapticFeedbackEnabled = AppSecurityManager.isAdminSession
+                setOnLongClickListener { !AppSecurityManager.isAdminSession }
                 settings.javaScriptEnabled = true
                 settings.domStorageEnabled = true
                 settings.loadWithOverviewMode = true
                 settings.useWideViewPort = true
-                webViewClient = WebViewClient()
+                setDownloadListener { downloadUrl, _, _, _, _ ->
+                  if (AppSecurityManager.canDownloadOrOpenExternal(ctx)) {
+                    try {
+                      ctx.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(downloadUrl)))
+                    } catch (_: Exception) {}
+                  }
+                }
+                webViewClient = object : WebViewClient() {
+                  override fun shouldOverrideUrlLoading(view: WebView?, request: android.webkit.WebResourceRequest?): Boolean {
+                    val dest = request?.url?.toString() ?: ""
+                    if (!AppSecurityManager.isAdminSession && (dest.contains("export=download", ignoreCase = true) || dest.contains("&download=", ignoreCase = true))) {
+                      Toast.makeText(ctx, "🔒 PDF භාගත කිරීම (Download) අවහිර කර ඇත!", Toast.LENGTH_SHORT).show()
+                      return true
+                    }
+                    return false
+                  }
+                  override fun onPageFinished(view: WebView?, url: String?) {
+                    super.onPageFinished(view, url)
+                    if (!AppSecurityManager.isAdminSession) {
+                      view?.evaluateJavascript(
+                        "javascript:(function(){var s=document.createElement('style');s.innerHTML='div[aria-label=\"Download\"],div[aria-label=\"Print\"],div[aria-label=\"Pop-out\"],.ndfHFb-c4YZDc-Wrql6b,button[title=\"Download\"],button[title=\"Print\"]{display:none!important;pointer-events:none!important;}';(document.head||document.documentElement).appendChild(s);document.documentElement.style.webkitUserSelect='none';document.documentElement.style.userSelect='none';document.addEventListener('copy',function(e){e.preventDefault();},true);document.addEventListener('cut',function(e){e.preventDefault();},true);document.addEventListener('contextmenu',function(e){e.preventDefault();},true);})()",
+                        null
+                      )
+                    }
+                  }
+                }
                 loadUrl(internalPdfUrl)
               }
             },

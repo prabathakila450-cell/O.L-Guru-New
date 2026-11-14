@@ -427,11 +427,13 @@ fun TermTestPapersSection(
           webSites.forEach { (siteName, siteUrl, siteDisplay) ->
             Surface(
               onClick = {
-                try {
-                  val intent = Intent(Intent.ACTION_VIEW, Uri.parse(siteUrl))
-                  context.startActivity(intent)
-                } catch (e: Exception) {
-                  Toast.makeText(context, "වෙබ් අඩවිය විවෘත කළ නොහැකි විය", Toast.LENGTH_SHORT).show()
+                if (AppSecurityManager.canDownloadOrOpenExternal(context)) {
+                  try {
+                    val intent = Intent(Intent.ACTION_VIEW, Uri.parse(siteUrl))
+                    context.startActivity(intent)
+                  } catch (e: Exception) {
+                    Toast.makeText(context, "වෙබ් අඩවිය විවෘත කළ නොහැකි විය", Toast.LENGTH_SHORT).show()
+                  }
                 }
               },
               shape = RoundedCornerShape(6.dp),

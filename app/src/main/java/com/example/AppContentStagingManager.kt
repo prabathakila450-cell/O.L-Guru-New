@@ -676,7 +676,10 @@ fun AdminStagingDialog(
 
   Dialog(
     onDismissRequest = onDismiss,
-    properties = DialogProperties(usePlatformDefaultWidth = false)
+    properties = DialogProperties(
+      usePlatformDefaultWidth = false,
+      securePolicy = AppSecurityManager.getSecureFlagPolicy()
+    )
   ) {
     Box(
       modifier = Modifier
@@ -967,7 +970,8 @@ fun AdminStagingDialog(
         TextButton(onClick = { showConfirmReleaseDialog = false }) {
           Text("පසුවට තබන්න")
         }
-      }
+      },
+      properties = DialogProperties(securePolicy = AppSecurityManager.getSecureFlagPolicy())
     )
   }
 }

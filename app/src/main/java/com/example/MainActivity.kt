@@ -24,6 +24,8 @@ import androidx.compose.ui.graphics.asImageBitmap
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.tasks.await
 import com.google.firebase.Firebase
@@ -223,7 +225,7 @@ data class UserAccount(
   var slipImageUri: String? = null,
   var paymentStatus: String = "Pending Approval",
   var requestedGradePackage: String = "10 සහ 11 ශ්‍රේණි (O/L Combo Pack)",
-  var approvedGrades: List<String> = listOf("10", "11", "10 ශ්‍රේණිය", "11 ශ්‍රේණිය"),
+  var approvedGrades: List<String> = emptyList(),
   var boundDeviceId: String? = null,
   var boundDeviceName: String? = null,
   var boundDate: String? = null,
@@ -239,7 +241,8 @@ const val APPROVAL_VALIDITY_MILLIS = APPROVAL_VALIDITY_DAYS * 24L * 60L * 60L * 
 fun UserAccount.isApprovalExpired(nowMillis: Long = System.currentTimeMillis()): Boolean {
   if (!isApproved) return false
   if (isAuthorizedAdminUser(usernameOrPhone)) return false
-  val approvedTime = approvalTimestamp ?: return false // If approved but no timestamp, it's not yet validly timed
+  val approvedTime = approvalTimestamp ?: return true
+  if (approvedTime <= 0L) return true
   return (nowMillis - approvedTime) >= APPROVAL_VALIDITY_MILLIS
 }
 
@@ -303,9 +306,6 @@ fun userAccountFromJsonString(jsonStr: String): UserAccount? {
         gradesList.add(gradesArray.getString(i))
       }
     }
-    if (gradesList.isEmpty()) {
-      gradesList.addAll(listOf("06", "07", "08", "09", "10", "11", "6 ශ්‍රේණිය", "7 ශ්‍රේණිය", "8 ශ්‍රේණිය", "9 ශ්‍රේණිය", "10 ශ්‍රේණිය", "11 ශ්‍රේණිය"))
-    }
     val appTimestamp = json.optLong("approvalTimestamp", 0L).takeIf { it > 0L }
     val reqDate = json.optString("requestDate").takeIf { it.isNotBlank() }
     val reqTimestamp = json.optLong("requestTimestamp", 0L).takeIf { it > 0L }
@@ -317,7 +317,7 @@ fun userAccountFromJsonString(jsonStr: String): UserAccount? {
       isApproved = json.optBoolean("isApproved", false),
       registerDate = json.optString("registerDate", "2026-08-20"),
       slipImageUri = json.optString("slipImageUri").takeIf { it.isNotBlank() },
-      paymentStatus = json.optString("paymentStatus", "Approved"),
+      paymentStatus = json.optString("paymentStatus", "Pending Approval"),
       requestedGradePackage = json.optString("requestedGradePackage", "06 සිට 11 දක්වා සියලුම ශ්‍රේණි (All Grades Mega Pack)"),
       approvedGrades = gradesList,
       boundDeviceId = json.optString("boundDeviceId").takeIf { it.isNotBlank() },
@@ -438,10 +438,11 @@ fun getApprovedGradesForPackage(pkg: String): List<String> {
 
 fun isUserApprovedForGrade(user: UserAccount?, grade: String, isAdmin: Boolean): Boolean {
   if (isAdmin) return true
-  if (user == null || !user.isApproved) return false
-  if (user.approvedGrades.isEmpty() || user.requestedGradePackage.contains("සියලු") || user.requestedGradePackage.contains("All")) {
+  if (user == null || !user.isApproved || user.isApprovalExpired()) return false
+  if (user.requestedGradePackage.contains("සියලු") || user.requestedGradePackage.contains("All")) {
     return true
   }
+  if (user.approvedGrades.isEmpty()) return false
   val cleanGrade = grade.replace("ශ්‍රේණිය", "").replace("Grade", "").replace("වසර", "").trim()
   val paddedGrade = if (cleanGrade.length == 1) "0$cleanGrade" else cleanGrade
   val singleDigit = if (cleanGrade.startsWith("0")) cleanGrade.substring(1) else cleanGrade
@@ -606,6 +607,16 @@ tailrec fun Context.findActivity(): ComponentActivity? = when (this) {
   else -> null
 }
 
+@SuppressLint("DiscouragedApi")
+private fun resolveDefaultWebClientId(context: Context): String {
+  return try {
+    val resId = context.resources.getIdentifier("default_web_client_id", "string", context.packageName)
+    if (resId != 0) context.getString(resId) else ""
+  } catch (_: Exception) {
+    ""
+  }
+}
+
 fun attemptAutoSignIn(
   context: Context,
   credentialManager: CredentialManager,
@@ -627,12 +638,7 @@ fun attemptAutoSignIn(
     return
   }
 
-  val clientId = try {
-    context.getString(R.string.default_web_client_id)
-  } catch (_: Exception) {
-    onUnauthenticated()
-    return
-  }
+  val clientId = resolveDefaultWebClientId(context)
   if (clientId.isBlank()) {
     onUnauthenticated()
     return
@@ -674,11 +680,7 @@ fun onGoogleSignInClicked(
   scope: kotlinx.coroutines.CoroutineScope,
   onAuthCancelled: (String?) -> Unit = {}
 ) {
-  val clientId = try {
-    context.getString(R.string.default_web_client_id)
-  } catch (_: Exception) {
-    ""
-  }
+  val clientId = resolveDefaultWebClientId(context)
   if (clientId.isBlank()) {
     onAuthError("Google Sign-In configuration missing: default_web_client_id not found")
     return
@@ -802,7 +804,22 @@ class MainActivity : ComponentActivity() {
   override fun onResume() {
     super.onResume()
     AdMobManager.updateActivity(this)
-    AppSecurityManager.enforceSecurityForUser(this, AppSecurityManager.isAdminSession)
+    AppSecurityManager.enforceSecurityForUser(
+      this,
+      AppSecurityManager.isAdminSession,
+      AppSecurityManager.isCleanHomeScreenActive
+    )
+  }
+
+  override fun onWindowFocusChanged(hasFocus: Boolean) {
+    super.onWindowFocusChanged(hasFocus)
+    if (hasFocus) {
+      AppSecurityManager.enforceSecurityForUser(
+        this,
+        AppSecurityManager.isAdminSession,
+        AppSecurityManager.isCleanHomeScreenActive
+      )
+    }
   }
 
   override fun onDestroy() {
@@ -887,6 +904,23 @@ fun StudentPortalApp() {
   var isAdminBarUnlocked by remember { mutableStateOf(false) }
   var showAdminBarUnlockDialog by remember { mutableStateOf(false) }
   var showExpiredStudentsDialog by remember { mutableStateOf(false) }
+  var adminBarCloudWaitVisible by remember { mutableStateOf(false) }
+  var adminBarCloudWaitOffline by remember { mutableStateOf(false) }
+  var adminBarCloudWaitMessage by remember { mutableStateOf("") }
+  var adminBarCloudJob by remember { mutableStateOf<Job?>(null) }
+
+  CloudInternetWaitDialog(
+    visible = adminBarCloudWaitVisible,
+    isWaitingForInternet = adminBarCloudWaitOffline,
+    title = "☁️ Cloud දත්ත පරීක්ෂා කරමින්...",
+    statusMessage = adminBarCloudWaitMessage,
+    onCancel = {
+      adminBarCloudJob?.cancel()
+      adminBarCloudJob = null
+      adminBarCloudWaitVisible = false
+      Toast.makeText(context, "Cloud Sync නවත්වන ලදී.", Toast.LENGTH_SHORT).show()
+    }
+  )
 
   // Cloud Sync: Observe users from Firestore and merge with local state
   val coroutineScope = androidx.compose.runtime.rememberCoroutineScope()
@@ -915,7 +949,11 @@ fun StudentPortalApp() {
           approvalTimestamp = cloudUser.approvalTimestamp,
           paymentStatus = cloudUser.paymentStatus,
           requestedGradePackage = cloudUser.requestedGradePackage.ifBlank { local.requestedGradePackage },
-          approvedGrades = if (cloudUser.approvedGrades.isNotEmpty()) cloudUser.approvedGrades else local.approvedGrades,
+          approvedGrades = if (cloudUser.isApproved) {
+            cloudUser.approvedGrades.ifEmpty { local.approvedGrades }
+          } else {
+            cloudUser.approvedGrades
+          },
           boundDeviceId = cloudUser.boundDeviceId,
           boundDeviceName = cloudUser.boundDeviceName,
           boundDate = cloudUser.boundDate,
@@ -934,7 +972,11 @@ fun StudentPortalApp() {
             approvalTimestamp = cloudUser.approvalTimestamp,
             paymentStatus = cloudUser.paymentStatus,
             requestedGradePackage = cloudUser.requestedGradePackage.ifBlank { currentLogged.requestedGradePackage },
-            approvedGrades = if (cloudUser.approvedGrades.isNotEmpty()) cloudUser.approvedGrades else currentLogged.approvedGrades,
+            approvedGrades = if (cloudUser.isApproved) {
+              cloudUser.approvedGrades.ifEmpty { currentLogged.approvedGrades }
+            } else {
+              cloudUser.approvedGrades
+            },
             boundDeviceId = cloudUser.boundDeviceId,
             boundDeviceName = cloudUser.boundDeviceName,
             boundDate = cloudUser.boundDate
@@ -1019,11 +1061,37 @@ fun StudentPortalApp() {
     }
   }
 
-  // Ensure logged-in user exists on cloud without overwriting existing cloud approval state
-  LaunchedEffect(loggedInUser) {
-    loggedInUser?.let { user ->
-      coroutineScope.launch {
-        CloudAuthManager.syncUserIfMissing(context, user)
+  // Ensure logged-in user exists on cloud without overwriting existing cloud approval state,
+  // and verify active student approval status directly from Cloud Server periodically.
+  LaunchedEffect(loggedInUser?.usernameOrPhone) {
+    val activeUser = loggedInUser ?: return@LaunchedEffect
+    coroutineScope.launch {
+      CloudAuthManager.syncUserIfMissing(context, activeUser)
+    }
+    if (!isAuthorizedAdminUser(activeUser.usernameOrPhone)) {
+      while (true) {
+        try {
+          if (CloudAuthManager.hasProperInternet(context)) {
+            val strictRes = CloudAuthManager.fetchUserFromCloudStrict(context, activeUser.usernameOrPhone)
+            if (strictRes.isSuccess) {
+              val cloudUser = strictRes.getOrNull()
+              val normKey = CloudAuthManager.normalizePhoneKey(activeUser.usernameOrPhone)
+              if (cloudUser == null) {
+                registeredUsers.removeAll { CloudAuthManager.normalizePhoneKey(it.usernameOrPhone) == normKey }
+                saveRegisteredDevicePhone(context, null)
+                saveLoggedInUserPhone(context, null)
+                saveUsersToPreferences(context, registeredUsers.toList())
+                loggedInUser = null
+                break
+              } else {
+                mergeCloudUsersSnapshot(listOf(cloudUser))
+              }
+            }
+          }
+        } catch (ce: kotlinx.coroutines.CancellationException) {
+          throw ce
+        } catch (_: Throwable) {}
+        kotlinx.coroutines.delay(15_000L)
       }
     }
   }
@@ -1036,7 +1104,7 @@ fun StudentPortalApp() {
       showAdminBarUnlockDialog = false
     }
     (context as? Activity)?.let { act ->
-      AppSecurityManager.enforceSecurityForUser(act, isAdminAuthenticated)
+      AppSecurityManager.enforceSecurityForUser(act, isAdminAuthenticated, AppSecurityManager.isCleanHomeScreenActive)
     }
   }
 
@@ -1050,7 +1118,7 @@ fun StudentPortalApp() {
     setAdminSessionActive(context, isAdmin)
     AppSecurityManager.isAdminSession = isAdmin
     (context as? Activity)?.let { act ->
-      AppSecurityManager.enforceSecurityForUser(act, isAdmin)
+      AppSecurityManager.enforceSecurityForUser(act, isAdmin, AppSecurityManager.isCleanHomeScreenActive)
     }
   }
   
@@ -1225,9 +1293,19 @@ fun StudentPortalApp() {
     }
     candidate != null && candidate.isApproved && candidate.isApprovalExpired(currentClockMillis) && !isAuthorizedAdminUser(candidate.usernameOrPhone)
   }
-  val isApprovedUser = isAdminAuthenticated || (loggedInUser != null && loggedInUser?.isApproved == true && !isApprovalExpiredForLoggedInUser)
+  val isApprovedUser = isAdminAuthenticated || (
+    loggedInUser != null &&
+    loggedInUser?.isApproved == true &&
+    (loggedInUser?.approvalTimestamp ?: 0L) > 0L &&
+    !isApprovalExpiredForLoggedInUser &&
+    (loggedInUser?.boundDeviceId == null || loggedInUser?.boundDeviceId == currDeviceHwId)
+  )
   val savedRegPhoneForLock = getRegisteredDevicePhone(context)
+  var hasCloudPendingLock by remember {
+    mutableStateOf(PersistentTrialSecurityManager.hasRequestedApproval(context))
+  }
   val hasPendingRequestForDevice = !isAdminAuthenticated && !isApprovedUser && !isApprovalExpiredForLoggedInUser && (
+    hasCloudPendingLock ||
     (loggedInUser != null && !loggedInUser!!.isApproved && !isAuthorizedAdminUser(loggedInUser!!.usernameOrPhone)) ||
     registeredUsers.any {
       !isAuthorizedAdminUser(it.usernameOrPhone) &&
@@ -1238,24 +1316,38 @@ fun StudentPortalApp() {
   )
 
   // 24-Hour 100% Free Trial for all Features & Grades from Initial Install Timestamp
-  // Robustly persistent across app uninstall & re-download (offloaded to IO to prevent splash screen UI stall)
-  var isTrialActiveState by remember { mutableStateOf(true) }
-  var remainingTrialHours by remember { mutableStateOf(24) }
+  // Robustly persistent across app uninstall & re-download (offloaded to IO + Cloud Firestore trial_devices)
+  var isTrialActiveState by remember {
+    mutableStateOf(PersistentTrialSecurityManager.isTrialActiveFastLocal(context))
+  }
+  var remainingTrialHours by remember { mutableStateOf(0) }
   var remainingTrialMinutes by remember { mutableStateOf(0) }
 
-  // Active real-time timer ticker on Dispatchers.IO (ticks every 2 seconds without blocking UI thread)
+  // Active real-time timer ticker & Cloud anti-reinstall trial sync on Dispatchers.IO
   LaunchedEffect(Unit) {
+    var tickCount = 0
     while (true) {
       try {
-        val (active, hm) = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+        val syncResult = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+          if (tickCount == 0 || tickCount % 15 == 0) {
+            CloudAuthManager.syncDeviceTrialWithCloud(
+              context = context,
+              markApprovalRequested = hasPendingRequestForDevice
+            )
+          }
           val isActive = PersistentTrialSecurityManager.isTrialActive(context)
           val remaining = PersistentTrialSecurityManager.getRemainingHoursMinutes(context)
-          Pair(isActive, remaining)
+          val reqLocked = PersistentTrialSecurityManager.hasRequestedApproval(context)
+          Triple(isActive, remaining, reqLocked)
         }
-        isTrialActiveState = active
-        remainingTrialHours = hm.first
-        remainingTrialMinutes = hm.second
+        isTrialActiveState = syncResult.first
+        remainingTrialHours = syncResult.second.first
+        remainingTrialMinutes = syncResult.second.second
+        hasCloudPendingLock = syncResult.third
         currentClockMillis = System.currentTimeMillis()
+        tickCount++
+      } catch (ce: kotlinx.coroutines.CancellationException) {
+        throw ce
       } catch (_: Throwable) {}
       kotlinx.coroutines.delay(2000L)
     }
@@ -1263,7 +1355,7 @@ fun StudentPortalApp() {
 
   // Once user requests Admin Approval (Pending) or their 6-month subscription expires,
   // 24-hour free trial is locked so sub-sections remain inaccessible until Admin approves.
-  val isFeatureTrialActive = isTrialActiveState && !hasPendingRequestForDevice && !isApprovalExpiredForLoggedInUser
+  val isFeatureTrialActive = isTrialActiveState && !hasPendingRequestForDevice && !hasCloudPendingLock && !isApprovalExpiredForLoggedInUser
 
   // Real-time VPN & Proxy detection polling on Dispatchers.IO
   var isVpnDetected by remember { mutableStateOf(false) }
@@ -1341,33 +1433,24 @@ fun StudentPortalApp() {
         currentScreen = "HOME"
         selectedTabNav = 0
       }
-      // Immediately dismiss any open protected readers, players or quizzes
+      // Immediately dismiss all open protected readers, players, sheets, or quizzes
+      selectedSubjectItem = null
+      activeDetailTitle = null
+      selectedItemPdfUri = null
       showIframePdfModal = false
       showPasswordDialog = false
       activeQuizSet = null
       showFlashcardsDialog = false
       showPdfQuizBottomSheet = false
+      showSanduTheoryFullReaderGlobal = false
+      showSinhalaVicharaDharaReaderGlobal = false
+      showScienceDiagramsReaderGlobal = false
+      showGradeNotApprovedDialog = false
+      showEyeCareSettingsSheet = false
     }
   }
 
-  // Dynamically toggle Screen Capture Protection based on current screen
-  // User explicitly requested to allow screenshots ONLY on the "HOME" screen (Main Dashboard)
-  LaunchedEffect(
-    currentScreen, isAdminAuthenticated, showAppLaunchSplash,
-    showIframePdfModal, activeQuizSet, showSanduTheoryFullReaderGlobal, 
-    showSinhalaVicharaDharaReaderGlobal, showAuthRequiredDialog, showPaymentApprovalDialog
-  ) {
-    (context as? Activity)?.let { act ->
-      val isHomeScreen = currentScreen == "HOME" && !showAppLaunchSplash
-      val isAnyRestrictedModalOpen = showIframePdfModal || activeQuizSet != null || 
-                                     showSanduTheoryFullReaderGlobal || showSinhalaVicharaDharaReaderGlobal ||
-                                     showAuthRequiredDialog || showPaymentApprovalDialog
-                                     
-      // Disable protection (allow screenshot) if user is Admin OR (on Home Screen AND no sensitive modal is open)
-      val shouldDisableProtection = isAdminAuthenticated || (isHomeScreen && !isAnyRestrictedModalOpen)
-      AppSecurityManager.applyScreenProtection(act, !shouldDisableProtection)
-    }
-  }
+  // Security enforcement is evaluated below after all modal/staging states are declared.
 
   fun performProtectedAction(action: () -> Unit) {
     if (isApprovedUser || isFeatureTrialActive) {
@@ -1626,6 +1709,50 @@ fun StudentPortalApp() {
   }
   val currentVideos = remember(liveVideosMap, selectedGrade) {
     liveVideosMap[selectedGrade] ?: mutableStateListOf<VideoLessonItem>()
+  }
+
+  // Allow regular users to take screenshots ONLY on the clean Home screen (no sub-screens,
+  // PDF viewers, quizzes, bottom sheets, or dialogs open). Everything else stays 100% FLAG_SECURE.
+  // Verified Admin sessions keep full freedom across all screens and modals.
+  val isEffectiveHomeScreen = (currentScreen == "HOME") || (!isApprovedUser && !isFeatureTrialActive)
+  val hasAnyOverlayOrModalOpen = showAppLaunchSplash ||
+    showAuthRequiredDialog ||
+    showPaymentApprovalDialog ||
+    showGradeNotApprovedDialog ||
+    showAddContentDialog ||
+    showStagingManagerDialog ||
+    showPasswordDialog ||
+    showIframePdfModal ||
+    showDrmWarningDialog ||
+    showPdfQuizBottomSheet ||
+    showEyeCareSettingsSheet ||
+    showSecurityPanelDialog ||
+    showNotificationCenterDialog ||
+    showAdminBroadcastComposerDialog ||
+    showAdminDashboardMasterDialog ||
+    showExpiredStudentsDialog ||
+    showAdminBarUnlockDialog ||
+    showSanduTheoryFullReaderGlobal ||
+    showSinhalaVicharaDharaReaderGlobal ||
+    showScienceDiagramsReaderGlobal ||
+    activeQuizSet != null ||
+    showFlashcardsDialog ||
+    activeDetailTitle != null ||
+    previewReceiptImageUrl != null ||
+    isVpnDetected ||
+    isTimeTamperedDetected ||
+    adminBarCloudWaitVisible
+  val isCleanHomeScreen = isEffectiveHomeScreen && !hasAnyOverlayOrModalOpen
+
+  LaunchedEffect(isCleanHomeScreen, isAdminAuthenticated) {
+    AppSecurityManager.isCleanHomeScreenActive = isCleanHomeScreen
+    (context as? Activity)?.let { act ->
+      AppSecurityManager.enforceSecurityForUser(
+        activity = act,
+        isAdmin = isAdminAuthenticated,
+        allowHomeScreenshotOnly = isCleanHomeScreen
+      )
+    }
   }
 
   // Graceful Back Navigation Handler: Intercepts device back button and gestures to prevent sudden exits
@@ -2424,19 +2551,41 @@ fun StudentPortalApp() {
                   isAdminBarUnlocked = false
                   Toast.makeText(context, "🔒 ඇඩ්මින් බාර් එක අගුළුලන ලදී (Admin Bar Locked)", Toast.LENGTH_SHORT).show()
                 },
-                isRefreshingCloud = isRefreshingAdminBarCloud,
+                isRefreshingCloud = isRefreshingAdminBarCloud || adminBarCloudWaitVisible,
                 onRefreshCloud = {
-                  if (!isRefreshingAdminBarCloud) {
+                  if (!isRefreshingAdminBarCloud && !adminBarCloudWaitVisible) {
                     isRefreshingAdminBarCloud = true
-                    coroutineScope.launch {
-                      val res = CloudAuthManager.fetchAllUsersFromCloud(context)
-                      isRefreshingAdminBarCloud = false
-                      res.onSuccess { cloudUsers ->
-                        mergeCloudUsersSnapshot(cloudUsers)
-                        val pNow = registeredUsers.count { !it.isApproved && !isAuthorizedAdminUser(it.usernameOrPhone) }
-                        Toast.makeText(context, "☁️ Cloud යාවත්කාලීන විය! අනුමැතියට: $pNow", Toast.LENGTH_SHORT).show()
-                      }.onFailure { err ->
-                        Toast.makeText(context, "⚠️ Cloud Sync අසාර්ථකයි: ${err.localizedMessage ?: "අන්තර්ජාලය පරීක්ෂා කරන්න"}", Toast.LENGTH_LONG).show()
+                    adminBarCloudWaitOffline = !CloudAuthManager.hasProperInternet(context)
+                    adminBarCloudWaitMessage = if (adminBarCloudWaitOffline) {
+                      "අන්තර්ජාල සබඳතාව අවශ්‍යයි! නියමිත මට්ටමේ අන්තර්ජාල සබඳතාවක් ලැබෙන තෙක් කැරකෙමින් රැඳී සිටී..."
+                    } else {
+                      "Cloud Server සමඟ සම්බන්ධ වී 100% තහවුරු කරමින්..."
+                    }
+                    adminBarCloudWaitVisible = true
+                    adminBarCloudJob = coroutineScope.launch {
+                      try {
+                        val res = CloudAuthManager.awaitProperInternetAndRun(
+                          context = context,
+                          onStatusUpdate = { waiting, msg ->
+                            adminBarCloudWaitOffline = waiting
+                            adminBarCloudWaitMessage = msg
+                          },
+                          block = { CloudAuthManager.fetchAllUsersFromCloudStrict(context) }
+                        )
+                        adminBarCloudWaitVisible = false
+                        isRefreshingAdminBarCloud = false
+                        res.onSuccess { cloudUsers ->
+                          mergeCloudUsersSnapshot(cloudUsers)
+                          val pNow = registeredUsers.count { !it.isApproved && !isAuthorizedAdminUser(it.usernameOrPhone) }
+                          Toast.makeText(context, "☁️ 100% නිවැරදිව Cloud යාවත්කාලීන විය! අනුමැතියට: $pNow", Toast.LENGTH_SHORT).show()
+                        }.onFailure { err ->
+                          Toast.makeText(context, "⚠️ Cloud Sync අසාර්ථකයි: ${err.localizedMessage ?: "අන්තර්ජාලය පරීක්ෂා කරන්න"}", Toast.LENGTH_LONG).show()
+                        }
+                      } catch (_: CancellationException) {
+                        adminBarCloudWaitVisible = false
+                        isRefreshingAdminBarCloud = false
+                      } finally {
+                        adminBarCloudJob = null
                       }
                     }
                   }
@@ -2508,8 +2657,13 @@ fun StudentPortalApp() {
             GradesHomeScreen(
               onGradeSelected = { grade ->
                 requireFeatureAccess {
-                  selectedGrade = grade
-                  currentScreen = "SUBJECTS"
+                  if (!isFeatureTrialActive && !isUserApprovedForGrade(loggedInUser, grade, isAdminAuthenticated)) {
+                    gradeNotApprovedTarget = grade
+                    showGradeNotApprovedDialog = true
+                  } else {
+                    selectedGrade = grade
+                    currentScreen = "SUBJECTS"
+                  }
                 }
               },
               onOpenAddModal = {
@@ -3186,7 +3340,8 @@ fun StudentPortalApp() {
             ) {
               Text("අවලංගුයි")
             }
-          }
+          },
+          properties = DialogProperties(securePolicy = AppSecurityManager.getSecureFlagPolicy())
         )
       }
 
@@ -3274,7 +3429,12 @@ fun StudentPortalApp() {
                   )
                   Spacer(modifier = Modifier.width(8.dp))
                   Text(
-                    text = if (isVideoModal) "මාර්ගගතව නැරඹීමට හෝ භාගත කරගැනීමට සූදානම්." else if (selectedItemPdfUri != null) "ඔබ අමුණන ලද PDF ගොනුව කියවීමට සූදානම්." else "PDF භාගත කිරීම සහ මාර්ගගතව කියවීම පහසුවෙන්ම කළ හැක.",
+                    text = when {
+                      isVideoModal -> if (isAdminAuthenticated) "මාර්ගගතව නැරඹීමට හෝ භාගත කරගැනීමට සූදානම්." else "ඇප් එක තුළින් පමණක් වීඩියෝ පාඩම නැරඹිය හැක (භාගත කිරීම අවහිරයි)."
+                      selectedItemPdfUri != null -> "ඔබ අමුණන ලද PDF ගොනුව යෙදුම තුළින් කියවීමට සූදානම්."
+                      isAdminAuthenticated -> "PDF භාගත කිරීම සහ මාර්ගගතව කියවීම පහසුවෙන්ම කළ හැක."
+                      else -> "යෙදුම තුළින් පමණක් ආරක්ෂිතව කියවීමට සූදානම් (භාගත කිරීම 100% අවහිර කර ඇත)."
+                    },
                     fontSize = 12.sp,
                     color = BlueOnPrimaryContainer
                   )
@@ -3290,22 +3450,39 @@ fun StudentPortalApp() {
                     iframeModalPdfTitle = activeDetailTitle ?: "PDF ලේඛනය"
                     iframeModalPdfUrl = selectedItemPdfUri ?: ""
                     showIframePdfModal = true
-                  } else {
-                    val msg = if (isVideoModal) "වීඩියෝව වාදනය වීම ආරම්භ විය" else "භාගත කිරීම ආරම්භ විය"
-                    Toast.makeText(context, msg, Toast.LENGTH_SHORT).show()
+                    activeDetailTitle = null
+                    selectedItemPdfUri = null
+                  } else if (isVideoModal) {
+                    Toast.makeText(context, "වීඩියෝව යෙදුම තුළ වාදනය වීම ආරම්භ විය", Toast.LENGTH_SHORT).show()
+                    activeDetailTitle = null
+                    selectedItemPdfUri = null
+                  } else if (AppSecurityManager.canDownloadOrOpenExternal(context)) {
+                    Toast.makeText(context, "භාගත කිරීම ආරම්භ විය", Toast.LENGTH_SHORT).show()
+                    activeDetailTitle = null
+                    selectedItemPdfUri = null
                   }
-                  activeDetailTitle = null
-                  selectedItemPdfUri = null
                 }
               },
               colors = ButtonDefaults.buttonColors(containerColor = if (selectedItemPdfUri != null) Color(0xFFC62828) else BluePrimary)
             ) {
               Icon(
-                imageVector = if (isVideoModal) Icons.Default.PlayArrow else if (selectedItemPdfUri != null) Icons.Default.PictureAsPdf else Icons.Default.Download,
+                imageVector = when {
+                  isVideoModal -> Icons.Default.PlayArrow
+                  selectedItemPdfUri != null -> Icons.Default.PictureAsPdf
+                  isAdminAuthenticated -> Icons.Default.Download
+                  else -> Icons.Default.Lock
+                },
                 contentDescription = "Action"
               )
               Spacer(modifier = Modifier.width(6.dp))
-              Text(if (isVideoModal) "Play Video" else if (selectedItemPdfUri != null) "PDF ගොනුව කියවන්න" else "Open / Download")
+              Text(
+                when {
+                  isVideoModal -> "Play Video"
+                  selectedItemPdfUri != null -> "PDF ගොනුව කියවන්න"
+                  isAdminAuthenticated -> "Open / Download"
+                  else -> "In-App View Only"
+                }
+              )
             }
           },
           dismissButton = {
@@ -3317,7 +3494,8 @@ fun StudentPortalApp() {
             ) {
               Text("Close")
             }
-          }
+          },
+          properties = DialogProperties(securePolicy = AppSecurityManager.getSecureFlagPolicy())
         )
       }
 
@@ -3715,7 +3893,8 @@ fun StudentPortalApp() {
             ) {
               Text("අවලංගු කරන්න")
             }
-          }
+          },
+          properties = DialogProperties(securePolicy = AppSecurityManager.getSecureFlagPolicy())
         )
       }
 
@@ -4003,9 +4182,9 @@ fun StudentPortalApp() {
                 AndroidView(
                   factory = { ctx ->
                     WebView(ctx).apply {
-                      isLongClickable = false
-                      isHapticFeedbackEnabled = false
-                      setOnLongClickListener { true }
+                      isLongClickable = AppSecurityManager.isAdminSession
+                      isHapticFeedbackEnabled = AppSecurityManager.isAdminSession
+                      setOnLongClickListener { !AppSecurityManager.isAdminSession }
 
                       // Enable unrestricted vertical and horizontal scrolling
                       isVerticalScrollBarEnabled = true
@@ -4017,47 +4196,67 @@ fun StudentPortalApp() {
                         override fun onPageFinished(view: WebView?, url: String?) {
                           super.onPageFinished(view, url)
                           // Inject CSS & JavaScript to disable text selection, copy, cut, contextmenu, hide Google Drive buttons, enable smooth scrolling, and apply Eye-Care Night/Sepia filters
-                          val drmAndEyeCareJs = """
-                            (function() {
-                              var css = '* { -webkit-user-select: none !important; -moz-user-select: none !important; -ms-user-select: none !important; user-select: none !important; -webkit-touch-callout: none !important; } ' +
-                                        'html, body { overflow-y: scroll !important; -webkit-overflow-scrolling: touch !important; height: auto !important; min-height: 100% !important; margin: 0 !important; padding: 0 !important; touch-action: pan-y pan-x !important; } ' +
-                                        '.drive-viewer-embed, .drive-viewer-toolstrip, div[role="document"], .ndfHFb-c4YZDc, div[role="main"], iframe, embed { overflow-y: auto !important; -webkit-overflow-scrolling: touch !important; touch-action: pan-y pan-x !important; } ' +
-                                        'div[aria-label="Download"], div[aria-label="Print"], div[aria-label="Pop-out"], .ndfHFb-c4YZDc-Wrql6b, button[title="Download"], button[title="Print"], .drive-viewer-toolstrip { display: none !important; pointer-events: none !important; }';
-                              var head = document.head || document.getElementsByTagName('head')[0];
-                              if (head) {
-                                var style = document.createElement('style');
-                                style.type = 'text/css';
-                                style.appendChild(document.createTextNode(css));
-                                head.appendChild(style);
-                              }
-                              var meta = document.querySelector('meta[name="viewport"]');
-                              if (!meta) {
-                                meta = document.createElement('meta');
-                                meta.name = 'viewport';
-                                document.head.appendChild(meta);
-                              }
-                              meta.setAttribute('content', 'width=device-width, initial-scale=1.0, minimum-scale=0.5, maximum-scale=8.0, user-scalable=yes');
-                              document.documentElement.style.touchAction = 'pan-y pan-x';
-                              document.body.style.touchAction = 'pan-y pan-x';
+                          val antiCopyJs = if (!AppSecurityManager.isAdminSession) {
+                            """
+                              (function() {
+                                var css = '* { -webkit-user-select: none !important; -moz-user-select: none !important; -ms-user-select: none !important; user-select: none !important; -webkit-touch-callout: none !important; } ' +
+                                          'html, body { overflow-y: scroll !important; -webkit-overflow-scrolling: touch !important; height: auto !important; min-height: 100% !important; margin: 0 !important; padding: 0 !important; touch-action: pan-y pan-x !important; } ' +
+                                          '.drive-viewer-embed, .drive-viewer-toolstrip, div[role="document"], .ndfHFb-c4YZDc, div[role="main"], iframe, embed { overflow-y: auto !important; -webkit-overflow-scrolling: touch !important; touch-action: pan-y pan-x !important; } ' +
+                                          'div[aria-label="Download"], div[aria-label="Print"], div[aria-label="Pop-out"], .ndfHFb-c4YZDc-Wrql6b, button[title="Download"], button[title="Print"], .drive-viewer-toolstrip { display: none !important; pointer-events: none !important; }';
+                                var head = document.head || document.getElementsByTagName('head')[0];
+                                if (head) {
+                                  var style = document.createElement('style');
+                                  style.type = 'text/css';
+                                  style.appendChild(document.createTextNode(css));
+                                  head.appendChild(style);
+                                }
+                                var meta = document.querySelector('meta[name="viewport"]');
+                                if (!meta) {
+                                  meta = document.createElement('meta');
+                                  meta.name = 'viewport';
+                                  document.head.appendChild(meta);
+                                }
+                                meta.setAttribute('content', 'width=device-width, initial-scale=1.0, minimum-scale=0.5, maximum-scale=8.0, user-scalable=yes');
+                                document.documentElement.style.touchAction = 'pan-y pan-x';
+                                document.body.style.touchAction = 'pan-y pan-x';
 
-                              document.addEventListener('contextmenu', function(e) { e.preventDefault(); e.stopPropagation(); return false; }, true);
-                              document.addEventListener('copy', function(e) { e.preventDefault(); e.stopPropagation(); return false; }, true);
-                              document.addEventListener('cut', function(e) { e.preventDefault(); e.stopPropagation(); return false; }, true);
-                              document.addEventListener('selectstart', function(e) { e.preventDefault(); e.stopPropagation(); return false; }, true);
-                              document.addEventListener('dragstart', function(e) { e.preventDefault(); e.stopPropagation(); return false; }, true);
-                            })();
-                          """.trimIndent() + "\n" + getEyeCareWebViewJs(activeEyeCareMode, activeFontScale)
+                                document.addEventListener('contextmenu', function(e) { e.preventDefault(); e.stopPropagation(); return false; }, true);
+                                document.addEventListener('copy', function(e) { e.preventDefault(); e.stopPropagation(); return false; }, true);
+                                document.addEventListener('cut', function(e) { e.preventDefault(); e.stopPropagation(); return false; }, true);
+                                document.addEventListener('selectstart', function(e) { e.preventDefault(); e.stopPropagation(); return false; }, true);
+                                document.addEventListener('dragstart', function(e) { e.preventDefault(); e.stopPropagation(); return false; }, true);
+                              })();
+                            """.trimIndent()
+                          } else ""
+                          val drmAndEyeCareJs = antiCopyJs + "\n" + getEyeCareWebViewJs(activeEyeCareMode, activeFontScale)
 
                           view?.evaluateJavascript(drmAndEyeCareJs, null)
                         }
 
                         override fun shouldOverrideUrlLoading(view: WebView?, request: android.webkit.WebResourceRequest?): Boolean {
                           val destination = request?.url?.toString() ?: ""
+                          if (!AppSecurityManager.isAdminSession && (
+                              destination.contains("export=download", ignoreCase = true) ||
+                              destination.contains("uc?export=download", ignoreCase = true) ||
+                              destination.contains("&download=", ignoreCase = true)
+                            )
+                          ) {
+                            Toast.makeText(ctx, "🔒 ආරක්ෂක නීති අනුව PDF භාගත කිරීම (Download) අවහිර කර ඇත!", Toast.LENGTH_SHORT).show()
+                            return true
+                          }
                           if (destination.contains("drive.google.com/start") || destination.contains("google.com/drive/start")) {
                             view?.loadUrl(formatToGoogleDriveEmbedUrl(iframeModalPdfUrl))
                             return true
                           }
                           return false
+                        }
+                      }
+                      setDownloadListener { downloadUrl, _, _, _, _ ->
+                        if (AppSecurityManager.canDownloadOrOpenExternal(ctx)) {
+                          try {
+                            val intent = Intent(Intent.ACTION_VIEW, Uri.parse(downloadUrl))
+                            ctx.startActivity(intent)
+                          } catch (_: Exception) {}
                         }
                       }
                       settings.javaScriptEnabled = true
@@ -4248,7 +4447,8 @@ fun StudentPortalApp() {
             ) {
               Text("තේරුම් ගතිමි (OK)")
             }
-          }
+          },
+          properties = DialogProperties(securePolicy = AppSecurityManager.getSecureFlagPolicy())
         )
       }
 
@@ -4320,7 +4520,10 @@ fun StudentPortalApp() {
       if (showAdminBroadcastComposerDialog) {
         Dialog(
           onDismissRequest = { showAdminBroadcastComposerDialog = false },
-          properties = DialogProperties(usePlatformDefaultWidth = false)
+          properties = DialogProperties(
+            usePlatformDefaultWidth = false,
+            securePolicy = AppSecurityManager.getSecureFlagPolicy()
+          )
         ) {
           Box(
             modifier = Modifier
@@ -4644,7 +4847,8 @@ fun FreeCloudInfoDialog(
       TextButton(onClick = onDismiss) {
         Text("තේරුම් ගත්තා", fontSize = 11.sp, color = NeutralDark)
       }
-    }
+    },
+    properties = DialogProperties(securePolicy = AppSecurityManager.getSecureFlagPolicy())
   )
 }
 
@@ -6273,10 +6477,22 @@ fun AdminBarUnlockDialog(
     confirmButton = {
       Button(
         onClick = {
+          val lockKey = "admin_bar_step2"
+          if (AppSecurityManager.isAccountLocked(lockKey)) {
+            val secs = AppSecurityManager.getLockoutRemainingSeconds(lockKey)
+            errorMessage = "🔒 වැරදි උත්සාහයන් වැඩියි! කරුණාකර තත්පර $secs කට පසු නැවත උත්සාහ කරන්න."
+            return@Button
+          }
           if (isValidAdminBarUnlockCredentials(usernameInput, nicInput, passwordInput)) {
+            AppSecurityManager.resetFailedLogins(lockKey)
             onUnlockSuccess()
           } else {
-            errorMessage = "❌ ඇතුළත් කළ පරිශීලක නාමය (Username), NIC අංකය හෝ මුරපදය (Password) වැරදියි! නිවැරදි විස්තර ඇතුළත් කරන්න."
+            val lockedNow = AppSecurityManager.recordFailedLogin(lockKey)
+            errorMessage = if (lockedNow) {
+              "🔒 වැරදි උත්සාහයන් 5ක්! ආරක්ෂාව සඳහා තත්පර 60කට අවහිර කරන ලදී."
+            } else {
+              "❌ ඇතුළත් කළ පරිශීලක නාමය (Username), NIC අංකය හෝ මුරපදය (Password) වැරදියි! නිවැරදි විස්තර ඇතුළත් කරන්න."
+            }
           }
         },
         colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF1E3A8A)),
@@ -6291,7 +6507,8 @@ fun AdminBarUnlockDialog(
       androidx.compose.material3.TextButton(onClick = onDismiss) {
         Text("අවලංගු කරන්න")
       }
-    }
+    },
+    properties = DialogProperties(securePolicy = AppSecurityManager.getSecureFlagPolicy())
   )
 }
 
@@ -6310,9 +6527,31 @@ fun ExpiredStudentsListDialog(
   val coroutineScope = androidx.compose.runtime.rememberCoroutineScope()
   val expiredStudents = registeredUsers.filter { it.isApprovalExpired() && !isAuthorizedAdminUser(it.usernameOrPhone) }
 
+  var expiredWaitVisible by remember { mutableStateOf(false) }
+  var expiredWaitOffline by remember { mutableStateOf(false) }
+  var expiredWaitTitle by remember { mutableStateOf("☁️ Cloud වෙත යවමින්...") }
+  var expiredWaitMessage by remember { mutableStateOf("") }
+  var expiredCloudJob by remember { mutableStateOf<Job?>(null) }
+
+  CloudInternetWaitDialog(
+    visible = expiredWaitVisible,
+    isWaitingForInternet = expiredWaitOffline,
+    title = expiredWaitTitle,
+    statusMessage = expiredWaitMessage,
+    onCancel = {
+      expiredCloudJob?.cancel()
+      expiredCloudJob = null
+      expiredWaitVisible = false
+      Toast.makeText(context, "ක්‍රියාවලිය නවත්වන ලදී. Cloud වෙත යොමු නොවුණි.", Toast.LENGTH_SHORT).show()
+    }
+  )
+
   Dialog(
     onDismissRequest = onDismiss,
-    properties = DialogProperties(usePlatformDefaultWidth = false)
+    properties = DialogProperties(
+      usePlatformDefaultWidth = false,
+      securePolicy = AppSecurityManager.getSecureFlagPolicy()
+    )
   ) {
     Box(
       modifier = Modifier
@@ -6554,21 +6793,51 @@ fun ExpiredStudentsListDialog(
                       // Renew 6 Months Button (Rs. 1000)
                       Button(
                         onClick = {
-                          val idx = registeredUsers.indexOf(student)
-                          if (idx >= 0) {
+                          if (!expiredWaitVisible) {
                             val renewed = student.copy(
                               isApproved = true,
                               paymentStatus = "Approved",
                               approvalTimestamp = System.currentTimeMillis()
                             )
-                            registeredUsers[idx] = renewed
-                            onUsersUpdated()
-                            coroutineScope.launch {
-                              CloudAuthManager.syncUserToCloud(context, renewed)
+                            expiredWaitTitle = "🔄 මාස 6 අලුත් කිරීම Cloud වෙත යවමින්..."
+                            expiredWaitOffline = !CloudAuthManager.hasProperInternet(context)
+                            expiredWaitMessage = if (expiredWaitOffline) {
+                              "අන්තර්ජාල සබඳතාව අවශ්‍යයි! නියමිත මට්ටමේ අන්තර්ජාල සබඳතාවක් ලැබෙන තෙක් කැරකෙමින් රැඳී සිටී..."
+                            } else {
+                              "Cloud Server සමඟ සම්බන්ධ වී 100% තහවුරු කරමින්..."
                             }
-                            Toast.makeText(context, "✅ ${student.fullName} හට මාස 6කට (රු. 1000) සාර්ථකව අලුත් කරන ලදී!", Toast.LENGTH_SHORT).show()
+                            expiredWaitVisible = true
+                            expiredCloudJob = coroutineScope.launch {
+                              try {
+                                val res = CloudAuthManager.awaitProperInternetAndRun(
+                                  context = context,
+                                  onStatusUpdate = { waiting, msg ->
+                                    expiredWaitOffline = waiting
+                                    expiredWaitMessage = msg
+                                  },
+                                  block = { CloudAuthManager.syncUserToCloudVerified(context, renewed) }
+                                )
+                                expiredWaitVisible = false
+                                res.onSuccess {
+                                  val normKey = CloudAuthManager.normalizePhoneKey(renewed.usernameOrPhone)
+                                  val idx = registeredUsers.indexOfFirst {
+                                    CloudAuthManager.normalizePhoneKey(it.usernameOrPhone) == normKey
+                                  }
+                                  if (idx >= 0) registeredUsers[idx] = renewed else registeredUsers.add(0, renewed)
+                                  onUsersUpdated()
+                                  Toast.makeText(context, "✅ ${student.fullName} හට මාස 6කට (රු. 1000) 100% නිවැරදිව අලුත් කර Cloud වෙත යවන ලදී!", Toast.LENGTH_SHORT).show()
+                                }.onFailure { err ->
+                                  Toast.makeText(context, "⚠️ අලුත් කිරීම අසාර්ථකයි: ${err.localizedMessage ?: "දෝෂයකි"}", Toast.LENGTH_LONG).show()
+                                }
+                              } catch (_: CancellationException) {
+                                expiredWaitVisible = false
+                              } finally {
+                                expiredCloudJob = null
+                              }
+                            }
                           }
                         },
+                        enabled = !expiredWaitVisible,
                         colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF059669)),
                         shape = RoundedCornerShape(8.dp),
                         modifier = Modifier.weight(1f).height(34.dp),
@@ -6607,10 +6876,43 @@ fun ExpiredStudentsListDialog(
                       // Delete Button
                       IconButton(
                         onClick = {
-                          registeredUsers.remove(student)
-                          onUsersUpdated()
-                          Toast.makeText(context, "${student.fullName} ගිණුම ඉවත් කරන ලදී.", Toast.LENGTH_SHORT).show()
+                          if (!expiredWaitVisible) {
+                            expiredWaitTitle = "🗑️ ගිණුම Cloud වෙතින් මකාදමමින්..."
+                            expiredWaitOffline = !CloudAuthManager.hasProperInternet(context)
+                            expiredWaitMessage = if (expiredWaitOffline) {
+                              "අන්තර්ජාල සබඳතාව අවශ්‍යයි! නියමිත මට්ටමේ අන්තර්ජාල සබඳතාවක් ලැබෙන තෙක් කැරකෙමින් රැඳී සිටී..."
+                            } else {
+                              "Cloud Server සමඟ සම්බන්ධ වී 100% තහවුරු කරමින්..."
+                            }
+                            expiredWaitVisible = true
+                            expiredCloudJob = coroutineScope.launch {
+                              try {
+                                val res = CloudAuthManager.awaitProperInternetAndRun(
+                                  context = context,
+                                  onStatusUpdate = { waiting, msg ->
+                                    expiredWaitOffline = waiting
+                                    expiredWaitMessage = msg
+                                  },
+                                  block = { CloudAuthManager.deleteUserFromCloudVerified(context, student.usernameOrPhone) }
+                                )
+                                expiredWaitVisible = false
+                                res.onSuccess {
+                                  val normKey = CloudAuthManager.normalizePhoneKey(student.usernameOrPhone)
+                                  registeredUsers.removeAll { CloudAuthManager.normalizePhoneKey(it.usernameOrPhone) == normKey }
+                                  onUsersUpdated()
+                                  Toast.makeText(context, "${student.fullName} ගිණුම 100% නිවැරදිව ඉවත් කරන ලදී.", Toast.LENGTH_SHORT).show()
+                                }.onFailure { err ->
+                                  Toast.makeText(context, "⚠️ ඉවත් කිරීම අසාර්ථකයි: ${err.localizedMessage ?: "දෝෂයකි"}", Toast.LENGTH_LONG).show()
+                                }
+                              } catch (_: CancellationException) {
+                                expiredWaitVisible = false
+                              } finally {
+                                expiredCloudJob = null
+                              }
+                            }
+                          }
                         },
+                        enabled = !expiredWaitVisible,
                         modifier = Modifier.size(34.dp)
                       ) {
                         Icon(Icons.Default.Delete, contentDescription = "Delete", tint = Color(0xFFDC2626), modifier = Modifier.size(18.dp))
@@ -8817,7 +9119,8 @@ fun GradeNotApprovedAlertModal(
           Text("වසන්න", fontSize = 11.sp)
         }
       }
-    }
+    },
+    properties = DialogProperties(securePolicy = AppSecurityManager.getSecureFlagPolicy())
   )
 }
 
@@ -8856,9 +9159,11 @@ fun UnlimitedAccessPaymentDialog(
     onDismissRequest = onDismiss,
     properties = DialogProperties(
       decorFitsSystemWindows = false,
-      usePlatformDefaultWidth = false
+      usePlatformDefaultWidth = false,
+      securePolicy = AppSecurityManager.getSecureFlagPolicy()
     )
   ) {
+    ConditionalDisableSelection(disabled = !AppSecurityManager.isAdminSession) {
     Box(
       modifier = Modifier
         .fillMaxWidth(0.95f)
@@ -9304,6 +9609,7 @@ fun UnlimitedAccessPaymentDialog(
         }
       }
     }
+    }
   }
 }
 
@@ -9314,8 +9620,12 @@ fun ReceiptPreviewDialog(
 ) {
   Dialog(
     onDismissRequest = onDismiss,
-    properties = DialogProperties(usePlatformDefaultWidth = false)
+    properties = DialogProperties(
+      usePlatformDefaultWidth = false,
+      securePolicy = AppSecurityManager.getSecureFlagPolicy()
+    )
   ) {
+    ConditionalDisableSelection(disabled = !AppSecurityManager.isAdminSession) {
     Box(
       modifier = Modifier
         .fillMaxWidth(0.92f)
@@ -9403,6 +9713,7 @@ fun ReceiptPreviewDialog(
         }
       }
     }
+    }
   }
 }
 
@@ -9426,10 +9737,12 @@ private fun CopyableDetailBar(label: String, value: String) {
       }
       Surface(
         onClick = {
-          val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-          val clip = ClipData.newPlainText(label, value)
-          clipboard.setPrimaryClip(clip)
-          Toast.makeText(context, "✅ $label පිටපත් විය!", Toast.LENGTH_SHORT).show()
+          AppSecurityManager.copyTextIfAdmin(
+            context = context,
+            label = label,
+            text = value,
+            successToast = "✅ $label පිටපත් විය!"
+          )
         },
         shape = RoundedCornerShape(6.dp),
         color = Color(0xFFF1F5F9),
@@ -9528,7 +9841,6 @@ fun LoginAndApprovalDialog(
     }
   }
 
-  var autoApproveNewUser by remember { mutableStateOf(true) }
   var showRegSuccessDialog by remember { mutableStateOf(false) }
 
   // Device Lock State
@@ -9546,6 +9858,27 @@ fun LoginAndApprovalDialog(
   var adminPdfCategory by remember { mutableStateOf("NOTE") } // "NOTE" or "PAPER"
   var adminPdfSubject by remember { mutableStateOf("විද්‍යාව") }
 
+  var regCloudWaitVisible by remember { mutableStateOf(false) }
+  var regCloudWaitOffline by remember { mutableStateOf(false) }
+  var regCloudWaitTitle by remember { mutableStateOf("☁️ ඇපෲ ඉල්ලීම යවමින්...") }
+  var regCloudWaitMessage by remember { mutableStateOf("") }
+  var regActiveCloudJob by remember { mutableStateOf<Job?>(null) }
+
+  CloudInternetWaitDialog(
+    visible = regCloudWaitVisible,
+    isWaitingForInternet = regCloudWaitOffline,
+    title = regCloudWaitTitle,
+    statusMessage = regCloudWaitMessage,
+    onCancel = {
+      regActiveCloudJob?.cancel()
+      regActiveCloudJob = null
+      regCloudWaitVisible = false
+      isSubmittingRequest = false
+      isCheckingCloudStatus = false
+      Toast.makeText(context, "ක්‍රියාවලිය නවත්වන ලදී. ඉල්ලීම Cloud වෙත යොමු නොවුණි.", Toast.LENGTH_SHORT).show()
+    }
+  )
+
   Dialog(
     onDismissRequest = onDismiss,
     properties = DialogProperties(
@@ -9554,6 +9887,7 @@ fun LoginAndApprovalDialog(
       securePolicy = AppSecurityManager.getSecureFlagPolicy()
     )
   ) {
+    ConditionalDisableSelection(disabled = !AppSecurityManager.isAdminSession) {
     Box(
       modifier = Modifier
         .fillMaxWidth(0.95f)
@@ -9756,54 +10090,90 @@ fun LoginAndApprovalDialog(
 
                   Button(
                     onClick = {
-                      if (!isCheckingCloudStatus) {
+                      if (!isCheckingCloudStatus && !regCloudWaitVisible) {
                         isCheckingCloudStatus = true
-                        coroutineScope.launch {
-                          val fetchRes = CloudAuthManager.fetchUserFromCloud(context, pendingUserForDevice.usernameOrPhone)
-                          fetchRes.onSuccess { cloudUser ->
-                            if (cloudUser != null && cloudUser.isApproved && !cloudUser.isApprovalExpired()) {
-                              if (cloudUser.boundDeviceId != null && cloudUser.boundDeviceId != currDevId) {
-                                isCheckingCloudStatus = false
-                                deviceLockedUserForAlert = cloudUser
-                              } else {
-                                val (_, currDevName) = getDeviceIdentifier(context)
-                                val activated = cloudUser.copy(
-                                  boundDeviceId = cloudUser.boundDeviceId ?: currDevId,
-                                  boundDeviceName = cloudUser.boundDeviceName ?: currDevName
-                                )
-                                val normKey = CloudAuthManager.normalizePhoneKey(activated.usernameOrPhone)
-                                val idx = registeredUsers.indexOfFirst {
-                                  CloudAuthManager.normalizePhoneKey(it.usernameOrPhone) == normKey
+                        regCloudWaitTitle = "☁️ අනුමැතිය පරීක්ෂා කරමින්..."
+                        regCloudWaitOffline = !CloudAuthManager.hasProperInternet(context)
+                        regCloudWaitMessage = if (regCloudWaitOffline) {
+                          "අන්තර්ජාල සබඳතාව අවශ්‍යයි! නියමිත මට්ටමේ අන්තර්ජාල සබඳතාවක් ලැබෙන තෙක් කැරකෙමින් රැඳී සිටී..."
+                        } else {
+                          "Cloud Server සමඟ සම්බන්ධ වී 100% තහවුරු කරමින්..."
+                        }
+                        regCloudWaitVisible = true
+                        regActiveCloudJob = coroutineScope.launch {
+                          try {
+                            val fetchRes = CloudAuthManager.awaitProperInternetAndRun<Pair<UserAccount, Boolean>>(
+                              context = context,
+                              onStatusUpdate = { waiting, msg ->
+                                regCloudWaitOffline = waiting
+                                regCloudWaitMessage = msg
+                              },
+                              block = {
+                                val cloudFetch = CloudAuthManager.fetchUserFromCloudStrict(context, pendingUserForDevice.usernameOrPhone)
+                                if (cloudFetch.isFailure) {
+                                  return@awaitProperInternetAndRun Result.failure(cloudFetch.exceptionOrNull() ?: Exception("Cloud check failed"))
                                 }
-                                if (idx >= 0) registeredUsers[idx] = activated else registeredUsers.add(0, activated)
-                                if (cloudUser.boundDeviceId == null) {
-                                  CloudAuthManager.syncUserToCloud(context, activated)
+                                val cloudUser = cloudFetch.getOrNull()
+                                if (cloudUser != null && cloudUser.isApproved && !cloudUser.isApprovalExpired() && cloudUser.boundDeviceId == null) {
+                                  val (_, currDevNameLocal) = getDeviceIdentifier(context)
+                                  val activated = cloudUser.copy(
+                                    boundDeviceId = currDevId,
+                                    boundDeviceName = cloudUser.boundDeviceName ?: currDevNameLocal
+                                  )
+                                  val bindRes = CloudAuthManager.syncUserToCloudVerified(context, activated)
+                                  if (bindRes.isFailure) {
+                                    return@awaitProperInternetAndRun Result.failure(bindRes.exceptionOrNull()!!)
+                                  }
+                                  return@awaitProperInternetAndRun Result.success(Pair(activated, false))
+                                } else if (cloudUser == null) {
+                                  val pushRes = CloudAuthManager.syncUserToCloudVerified(context, pendingUserForDevice)
+                                  if (pushRes.isFailure) {
+                                    return@awaitProperInternetAndRun Result.failure(pushRes.exceptionOrNull()!!)
+                                  }
+                                  return@awaitProperInternetAndRun Result.success(Pair(pendingUserForDevice, true))
                                 }
-                                onUsersUpdated()
-                                isCheckingCloudStatus = false
-                                Toast.makeText(context, "🎉 සුබපැතුම්! ඇඩ්මින් ඔබගේ ගිණුම අනුමත කර ඇත!", Toast.LENGTH_LONG).show()
-                                onLoginSuccess(activated)
+                                Result.success(Pair(cloudUser, false))
                               }
-                            } else if (cloudUser == null) {
-                              val pushRes = CloudAuthManager.syncUserToCloud(context, pendingUserForDevice)
-                              isCheckingCloudStatus = false
-                              if (pushRes.isSuccess) {
-                                Toast.makeText(context, "☁️ ඔබගේ ඉල්ලීම ඇඩ්මින් පැනලයට සාර්ථකව යවන ලදී! ඇඩ්මින් අනුමත කරන තෙක් රැඳී සිටින්න.", Toast.LENGTH_LONG).show()
-                              } else {
-                                Toast.makeText(context, "⚠️ Cloud වෙත යැවීම අසාර්ථකයි: ${pushRes.exceptionOrNull()?.localizedMessage ?: "අන්තර්ජාලය පරීක්ෂා කරන්න"}", Toast.LENGTH_LONG).show()
-                              }
-                            } else {
-                              isCheckingCloudStatus = false
-                              Toast.makeText(context, "⏳ ඔබගේ ඉල්ලීම ඇඩ්මින් පැනලයට ලැබී ඇත. ඇඩ්මින් අනුමත කළ වහාම මෙහි සක්‍රීය වේ.", Toast.LENGTH_LONG).show()
-                            }
-                          }.onFailure { err ->
+                            )
+                            regCloudWaitVisible = false
                             isCheckingCloudStatus = false
-                            Toast.makeText(context, "⚠️ Cloud පරීක්ෂාව අසාර්ථකයි: ${err.localizedMessage ?: "අන්තර්ජාලය පරීක්ෂා කරන්න"}", Toast.LENGTH_LONG).show()
+                            fetchRes.onSuccess { (resultUser, wasJustPushed) ->
+                              if (wasJustPushed) {
+                                Toast.makeText(context, "☁️ ඔබගේ ඉල්ලීම 100% නිවැරදිව ඇඩ්මින් පැනලයට යවන ලදී! ඇඩ්මින් අනුමත කරන තෙක් රැඳී සිටින්න.", Toast.LENGTH_LONG).show()
+                              } else if (resultUser.isApproved && !resultUser.isApprovalExpired()) {
+                                if (resultUser.boundDeviceId != null && resultUser.boundDeviceId != currDevId) {
+                                  deviceLockedUserForAlert = resultUser
+                                } else {
+                                  val (_, currDevNameLocal) = getDeviceIdentifier(context)
+                                  val activated = resultUser.copy(
+                                    boundDeviceId = resultUser.boundDeviceId ?: currDevId,
+                                    boundDeviceName = resultUser.boundDeviceName ?: currDevNameLocal
+                                  )
+                                  val normKey = CloudAuthManager.normalizePhoneKey(activated.usernameOrPhone)
+                                  val idx = registeredUsers.indexOfFirst {
+                                    CloudAuthManager.normalizePhoneKey(it.usernameOrPhone) == normKey
+                                  }
+                                  if (idx >= 0) registeredUsers[idx] = activated else registeredUsers.add(0, activated)
+                                  onUsersUpdated()
+                                  Toast.makeText(context, "🎉 සුබපැතුම්! ඇඩ්මින් ඔබගේ ගිණුම අනුමත කර ඇත!", Toast.LENGTH_LONG).show()
+                                  onLoginSuccess(activated)
+                                }
+                              } else {
+                                Toast.makeText(context, "⏳ ඔබගේ ඉල්ලීම ඇඩ්මින් පැනලයට 100% ලැබී ඇත. ඇඩ්මින් අනුමත කළ වහාම මෙහි සක්‍රීය වේ.", Toast.LENGTH_LONG).show()
+                              }
+                            }.onFailure { err ->
+                              Toast.makeText(context, "⚠️ Cloud පරීක්ෂාව අසාර්ථකයි: ${err.localizedMessage ?: "අන්තර්ජාලය පරීක්ෂා කරන්න"}", Toast.LENGTH_LONG).show()
+                            }
+                          } catch (_: CancellationException) {
+                            regCloudWaitVisible = false
+                            isCheckingCloudStatus = false
+                          } finally {
+                            regActiveCloudJob = null
                           }
                         }
                       }
                     },
-                    enabled = !isCheckingCloudStatus,
+                    enabled = !isCheckingCloudStatus && !regCloudWaitVisible,
                     colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF059669)),
                     shape = RoundedCornerShape(12.dp),
                     modifier = Modifier.fillMaxWidth().height(46.dp)
@@ -10155,7 +10525,7 @@ fun LoginAndApprovalDialog(
 
             Button(
               onClick = {
-                if (isSubmittingRequest || isGoogleSigningIn) return@Button
+                if (isSubmittingRequest || isGoogleSigningIn || regCloudWaitVisible) return@Button
                 val (currDevId, currDevName) = getDeviceIdentifier(context)
                 val cleanPhone = regPhone.trim()
                 if (cleanPhone.isBlank()) {
@@ -10184,177 +10554,226 @@ fun LoginAndApprovalDialog(
                   return@Button
                 }
 
-                // Helper to activate or register & sync directly to Cloud Firestore + launch WhatsApp
+                // Helper to wait for validated internet, verify on Cloud Firestore Server 100%, commit locally, and launch WhatsApp
                 val submitOrActivate: () -> Unit = {
                   isSubmittingRequest = true
-                  coroutineScope.launch {
-                    val slipString = regSlipDataUri ?: regSlipUri?.let {
-                      CloudAuthManager.encodeSlipImageToDataUri(context, it)
-                    }
-                    val allCloudUsers = CloudAuthManager.fetchAllUsersFromCloud(context).getOrNull() ?: registeredUsers.toList()
-                    val otherAccountOnThisDevice = allCloudUsers.find {
-                      !isAuthorizedAdminUser(it.usernameOrPhone) &&
-                        it.boundDeviceId == currDevId &&
-                        CloudAuthManager.normalizePhoneKey(it.usernameOrPhone) != normPhone
-                    }
-                    if (otherAccountOnThisDevice != null) {
-                      isSubmittingRequest = false
-                      saveRegisteredDevicePhone(context, otherAccountOnThisDevice.usernameOrPhone)
-                      Toast.makeText(
-                        context,
-                        "⚠️ මෙම දුරකථනය දැනටමත් ${otherAccountOnThisDevice.usernameOrPhone} සමඟ ලියාපදිංචි වී ඇත! එක් වරක් පමණක් ලියාපදිංචි විය හැක.",
-                        Toast.LENGTH_LONG
-                      ).show()
-                      return@launch
-                    }
-
-                    val cloudFetch = CloudAuthManager.fetchUserFromCloud(context, cleanPhone).getOrNull()
-                    val localExisting = registeredUsers.find {
-                      CloudAuthManager.normalizePhoneKey(it.usernameOrPhone) == normPhone
-                    }
-                    val existing = cloudFetch ?: localExisting
-
-                    if (existing != null && existing.boundDeviceId != null && existing.boundDeviceId != currDevId) {
-                      isSubmittingRequest = false
-                      deviceLockedUserForAlert = existing
-                      return@launch
-                    }
-
-                    if (existing != null && existing.isApproved && !existing.isApprovalExpired()) {
-                      isSubmittingRequest = false
-                      val activated = existing.copy(
-                        boundDeviceId = existing.boundDeviceId ?: currDevId,
-                        boundDeviceName = existing.boundDeviceName ?: currDevName
-                      )
-                      val idx = registeredUsers.indexOfFirst {
-                        CloudAuthManager.normalizePhoneKey(it.usernameOrPhone) == normPhone
+                  regCloudWaitTitle = "☁️ ඇපෲ ඉල්ලීම 100% නිවැරදිව යවමින්..."
+                  regCloudWaitOffline = !CloudAuthManager.hasProperInternet(context)
+                  regCloudWaitMessage = if (regCloudWaitOffline) {
+                    "අන්තර්ජාල සබඳතාව අවශ්‍යයි! නියමිත මට්ටමේ අන්තර්ජාල සබඳතාවක් ලැබෙන තෙක් කැරකෙමින් රැඳී සිටී..."
+                  } else {
+                    "Cloud Server සමඟ සම්බන්ධ වී 100% තහවුරු කරමින්..."
+                  }
+                  regCloudWaitVisible = true
+                  regActiveCloudJob = coroutineScope.launch {
+                    try {
+                      val slipString = regSlipDataUri ?: regSlipUri?.let {
+                        CloudAuthManager.encodeSlipImageToDataUri(context, it)
                       }
-                      if (idx >= 0) registeredUsers[idx] = activated else registeredUsers.add(0, activated)
-                      if (existing.boundDeviceId == null) {
-                        CloudAuthManager.syncUserToCloud(context, activated)
-                      }
-                      saveRegisteredDevicePhone(context, activated.usernameOrPhone)
-                      onUsersUpdated()
-                      Toast.makeText(context, "✅ ඔබගේ ගිණුම දැනටමත් ඇඩ්මින් අනුමත කර ඇත! සාදරයෙන් පිළිගනිමු.", Toast.LENGTH_LONG).show()
-                      onLoginSuccess(activated)
-                    } else if (existing != null && !existing.isApprovalExpired()) {
-                      // Pending user updating/re-syncing request
-                      val now = System.currentTimeMillis()
-                      val nowFmt = SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.getDefault()).format(Date(now))
-                      val updatedPending = existing.copy(
-                        fullName = regName.trim().ifBlank { existing.fullName },
-                        password = regPassword.trim().ifBlank { existing.password.ifBlank { "1234" } },
-                        slipImageUri = slipString ?: existing.slipImageUri,
-                        paymentStatus = if (slipString != null || existing.slipImageUri != null) "Pending Approval (With Slip)" else "Pending Approval",
-                        boundDeviceId = existing.boundDeviceId ?: currDevId,
-                        boundDeviceName = existing.boundDeviceName ?: currDevName,
-                        requestDate = nowFmt,
-                        requestTimestamp = now
-                      )
-                      val idx = registeredUsers.indexOfFirst {
-                        CloudAuthManager.normalizePhoneKey(it.usernameOrPhone) == normPhone
-                      }
-                      if (idx >= 0) registeredUsers[idx] = updatedPending else registeredUsers.add(0, updatedPending)
-                      saveRegisteredDevicePhone(context, updatedPending.usernameOrPhone)
-                      saveLoggedInUserPhone(context, updatedPending.usernameOrPhone)
-                      onUsersUpdated()
-                      val syncRes = CloudAuthManager.syncUserToCloud(context, updatedPending)
-                      isSubmittingRequest = false
-                      if (syncRes.isSuccess) {
-                        Toast.makeText(context, "☁️ ඔබගේ ඉල්ලීම ඇඩ්මින් ඩෑෂ්බෝඩ් හා WhatsApp වෙත යොමු කරන ලදී!", Toast.LENGTH_LONG).show()
-                      } else {
-                        Toast.makeText(context, "⚠️ ඉල්ලීම සුරැකුණි, නමුත් Cloud Sync අසාර්ථකයි: ${syncRes.exceptionOrNull()?.localizedMessage ?: ""}", Toast.LENGTH_LONG).show()
-                      }
-                      launchAdminWhatsAppRequest(
+                      val verifiedOutcome = CloudAuthManager.awaitProperInternetAndRun(
                         context = context,
-                        fullName = updatedPending.fullName,
-                        phone = updatedPending.usernameOrPhone,
-                        gradePackage = updatedPending.requestedGradePackage,
-                        deviceName = updatedPending.boundDeviceName ?: currDevName,
-                        isRenewal = existing.paymentStatus.contains("Renewal", ignoreCase = true),
-                        hasSlip = updatedPending.slipImageUri != null
-                      )
-                    } else {
-                      // Brand new registration OR Rs. 1,000 renewal of expired 6-month account
-                      val effectiveName = regName.trim().ifBlank { existing?.fullName ?: "" }
-                      if (effectiveName.isBlank()) {
-                        isSubmittingRequest = false
-                        Toast.makeText(context, "කරුණාකර ඔබගේ සම්පූර්ණ නම ඇතුළත් කරන්න", Toast.LENGTH_SHORT).show()
-                        return@launch
-                      }
-                      val isExpiredRenewal = existing != null && existing.isApprovalExpired()
-                      val currentNow = System.currentTimeMillis()
-                      val currentNowFormatted = SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.getDefault()).format(Date(currentNow))
-                      val newAcc = UserAccount(
-                        id = existing?.id?.ifBlank { currentNow.toString() } ?: currentNow.toString(),
-                        fullName = effectiveName,
-                        usernameOrPhone = cleanPhone,
-                        password = regPassword.trim().ifBlank { existing?.password ?: "1234" },
-                        isApproved = false,
-                        slipImageUri = slipString ?: if (isExpiredRenewal) null else existing?.slipImageUri,
-                        paymentStatus = when {
-                          isExpiredRenewal && slipString != null -> "Pending Renewal (Rs. 1,000 With Slip)"
-                          isExpiredRenewal -> "Pending Renewal (Rs. 1,000)"
-                          slipString != null -> "Pending Approval (With Slip)"
-                          else -> "Pending Approval"
+                        onStatusUpdate = { waiting, msg ->
+                          regCloudWaitOffline = waiting
+                          regCloudWaitMessage = msg
                         },
-                        requestedGradePackage = existing?.requestedGradePackage?.ifBlank { "06 සිට 11 දක්වා සියලුම ශ්‍රේණි (All Grades)" }
-                          ?: "06 සිට 11 දක්වා සියලුම ශ්‍රේණි (All Grades)",
-                        approvedGrades = listOf("06", "07", "08", "09", "10", "11", "6 ශ්‍රේණිය", "7 ශ්‍රේණිය", "8 ශ්‍රේණිය", "9 ශ්‍රේණිය", "10 ශ්‍රේණිය", "11 ශ්‍රේණිය"),
-                        boundDeviceId = currDevId,
-                        boundDeviceName = currDevName,
-                        boundDate = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Date(currentNow)),
-                        approvalTimestamp = null,
-                        requestDate = currentNowFormatted,
-                        requestTimestamp = currentNow
-                      )
-                      val idx = registeredUsers.indexOfFirst {
-                        CloudAuthManager.normalizePhoneKey(it.usernameOrPhone) == normPhone
-                      }
-                      if (idx >= 0) registeredUsers[idx] = newAcc else registeredUsers.add(0, newAcc)
-                      saveRegisteredDevicePhone(context, newAcc.usernameOrPhone)
-                      saveLoggedInUserPhone(context, newAcc.usernameOrPhone)
-                      onUsersUpdated()
+                        block = {
+                          val allCloudRes = CloudAuthManager.fetchAllUsersFromCloudStrict(context)
+                          if (allCloudRes.isFailure) return@awaitProperInternetAndRun Result.failure(allCloudRes.exceptionOrNull()!!)
+                          val allCloudUsers = allCloudRes.getOrThrow()
 
-                      val syncRes = CloudAuthManager.syncUserToCloud(context, newAcc)
+                          val otherAccountOnThisDevice = allCloudUsers.find {
+                            !isAuthorizedAdminUser(it.usernameOrPhone) &&
+                              it.boundDeviceId == currDevId &&
+                              CloudAuthManager.normalizePhoneKey(it.usernameOrPhone) != normPhone
+                          }
+                          if (otherAccountOnThisDevice != null) {
+                            return@awaitProperInternetAndRun Result.success(Triple("OTHER_DEVICE_ACCT", otherAccountOnThisDevice, false))
+                          }
+
+                          val cloudFetchRes = CloudAuthManager.fetchUserFromCloudStrict(context, cleanPhone)
+                          if (cloudFetchRes.isFailure) return@awaitProperInternetAndRun Result.failure(cloudFetchRes.exceptionOrNull()!!)
+                          val cloudFetch = cloudFetchRes.getOrNull()
+                          val existing = cloudFetch
+
+                          if (existing != null && existing.boundDeviceId != null && existing.boundDeviceId != currDevId) {
+                            return@awaitProperInternetAndRun Result.success(Triple("BOUND_OTHER_PHONE", existing, false))
+                          }
+
+                          if (existing != null && existing.isApproved && !existing.isApprovalExpired()) {
+                            val activated = existing.copy(
+                              boundDeviceId = existing.boundDeviceId ?: currDevId,
+                              boundDeviceName = existing.boundDeviceName ?: currDevName
+                            )
+                            if (existing.boundDeviceId == null) {
+                              val syncRes = CloudAuthManager.syncUserToCloudVerified(context, activated)
+                              if (syncRes.isFailure) return@awaitProperInternetAndRun Result.failure(syncRes.exceptionOrNull()!!)
+                            }
+                            return@awaitProperInternetAndRun Result.success(Triple("ALREADY_APPROVED", activated, false))
+                          }
+
+                          if (existing != null && !existing.isApprovalExpired()) {
+                            val now = System.currentTimeMillis()
+                            val nowFmt = SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.getDefault()).format(Date(now))
+                            val updatedPending = existing.copy(
+                              fullName = regName.trim().ifBlank { existing.fullName },
+                              password = regPassword.trim().ifBlank { existing.password.ifBlank { "1234" } },
+                              slipImageUri = slipString ?: existing.slipImageUri,
+                              paymentStatus = if (slipString != null || existing.slipImageUri != null) "Pending Approval (With Slip)" else "Pending Approval",
+                              approvedGrades = emptyList(),
+                              boundDeviceId = existing.boundDeviceId ?: currDevId,
+                              boundDeviceName = existing.boundDeviceName ?: currDevName,
+                              requestDate = nowFmt,
+                              requestTimestamp = now
+                            )
+                            val syncRes = CloudAuthManager.syncUserToCloudVerified(context, updatedPending)
+                            if (syncRes.isFailure) return@awaitProperInternetAndRun Result.failure(syncRes.exceptionOrNull()!!)
+                            CloudAuthManager.syncDeviceTrialWithCloud(context, markApprovalRequested = true)
+                            return@awaitProperInternetAndRun Result.success(Triple("PENDING_SYNCED", updatedPending, existing.paymentStatus.contains("Renewal", ignoreCase = true)))
+                          }
+
+                          val effectiveName = regName.trim().ifBlank { existing?.fullName ?: "" }
+                          if (effectiveName.isBlank()) {
+                            return@awaitProperInternetAndRun Result.success(Triple("MISSING_NAME", null, false))
+                          }
+
+                          val isExpiredRenewal = existing != null && existing.isApprovalExpired()
+                          val currentNow = System.currentTimeMillis()
+                          val currentNowFormatted = SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.getDefault()).format(Date(currentNow))
+                          val newAcc = UserAccount(
+                            id = existing?.id?.ifBlank { currentNow.toString() } ?: currentNow.toString(),
+                            fullName = effectiveName,
+                            usernameOrPhone = cleanPhone,
+                            password = regPassword.trim().ifBlank { existing?.password ?: "1234" },
+                            isApproved = false,
+                            slipImageUri = slipString ?: if (isExpiredRenewal) null else existing?.slipImageUri,
+                            paymentStatus = when {
+                              isExpiredRenewal && slipString != null -> "Pending Renewal (Rs. 1,000 With Slip)"
+                              isExpiredRenewal -> "Pending Renewal (Rs. 1,000)"
+                              slipString != null -> "Pending Approval (With Slip)"
+                              else -> "Pending Approval"
+                            },
+                            requestedGradePackage = existing?.requestedGradePackage?.ifBlank { "06 සිට 11 දක්වා සියලුම ශ්‍රේණි (All Grades)" }
+                              ?: "06 සිට 11 දක්වා සියලුම ශ්‍රේණි (All Grades)",
+                            approvedGrades = emptyList(),
+                            boundDeviceId = currDevId,
+                            boundDeviceName = currDevName,
+                            boundDate = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Date(currentNow)),
+                            approvalTimestamp = null,
+                            requestDate = currentNowFormatted,
+                            requestTimestamp = currentNow
+                          )
+                          val syncRes = CloudAuthManager.syncUserToCloudVerified(context, newAcc)
+                          if (syncRes.isFailure) return@awaitProperInternetAndRun Result.failure(syncRes.exceptionOrNull()!!)
+                          CloudAuthManager.syncDeviceTrialWithCloud(context, markApprovalRequested = true)
+                          Result.success(Triple("NEW_OR_RENEWAL_SYNCED", newAcc, isExpiredRenewal))
+                        }
+                      )
+
+                      regCloudWaitVisible = false
                       isSubmittingRequest = false
-                      if (syncRes.isSuccess) {
+
+                      verifiedOutcome.onSuccess { (code, userObj, isRenewalFlag) ->
+                        when (code) {
+                          "OTHER_DEVICE_ACCT" -> {
+                            val otherAcc = userObj!!
+                            saveRegisteredDevicePhone(context, otherAcc.usernameOrPhone)
+                            Toast.makeText(
+                              context,
+                              "⚠️ මෙම දුරකථනය දැනටමත් ${otherAcc.usernameOrPhone} සමඟ ලියාපදිංචි වී ඇත! එක් වරක් පමණක් ලියාපදිංචි විය හැක.",
+                              Toast.LENGTH_LONG
+                            ).show()
+                          }
+                          "BOUND_OTHER_PHONE" -> {
+                            deviceLockedUserForAlert = userObj
+                          }
+                          "MISSING_NAME" -> {
+                            Toast.makeText(context, "කරුණාකර ඔබගේ සම්පූර්ණ නම ඇතුළත් කරන්න", Toast.LENGTH_SHORT).show()
+                          }
+                          "ALREADY_APPROVED" -> {
+                            val activated = userObj!!
+                            val idx = registeredUsers.indexOfFirst {
+                              CloudAuthManager.normalizePhoneKey(it.usernameOrPhone) == normPhone
+                            }
+                            if (idx >= 0) registeredUsers[idx] = activated else registeredUsers.add(0, activated)
+                            saveRegisteredDevicePhone(context, activated.usernameOrPhone)
+                            onUsersUpdated()
+                            Toast.makeText(context, "✅ ඔබගේ ගිණුම දැනටමත් ඇඩ්මින් අනුමත කර ඇත! සාදරයෙන් පිළිගනිමු.", Toast.LENGTH_LONG).show()
+                            onLoginSuccess(activated)
+                          }
+                          "PENDING_SYNCED" -> {
+                            val updatedPending = userObj!!
+                            PersistentTrialSecurityManager.markApprovalRequested(context)
+                            val idx = registeredUsers.indexOfFirst {
+                              CloudAuthManager.normalizePhoneKey(it.usernameOrPhone) == normPhone
+                            }
+                            if (idx >= 0) registeredUsers[idx] = updatedPending else registeredUsers.add(0, updatedPending)
+                            saveRegisteredDevicePhone(context, updatedPending.usernameOrPhone)
+                            saveLoggedInUserPhone(context, updatedPending.usernameOrPhone)
+                            onUsersUpdated()
+                            Toast.makeText(context, "☁️ ඔබගේ ඉල්ලීම 100% නිවැරදිව ඇඩ්මින් ඩෑෂ්බෝඩ් හා WhatsApp වෙත යොමු කරන ලදී!", Toast.LENGTH_LONG).show()
+                            launchAdminWhatsAppRequest(
+                              context = context,
+                              fullName = updatedPending.fullName,
+                              phone = updatedPending.usernameOrPhone,
+                              gradePackage = updatedPending.requestedGradePackage,
+                              deviceName = updatedPending.boundDeviceName ?: currDevName,
+                              isRenewal = isRenewalFlag,
+                              hasSlip = updatedPending.slipImageUri != null
+                            )
+                          }
+                          "NEW_OR_RENEWAL_SYNCED" -> {
+                            val newAcc = userObj!!
+                            PersistentTrialSecurityManager.markApprovalRequested(context)
+                            val idx = registeredUsers.indexOfFirst {
+                              CloudAuthManager.normalizePhoneKey(it.usernameOrPhone) == normPhone
+                            }
+                            if (idx >= 0) registeredUsers[idx] = newAcc else registeredUsers.add(0, newAcc)
+                            saveRegisteredDevicePhone(context, newAcc.usernameOrPhone)
+                            saveLoggedInUserPhone(context, newAcc.usernameOrPhone)
+                            onUsersUpdated()
+                            Toast.makeText(
+                              context,
+                              if (isRenewalFlag) {
+                                "✅ මාස 6 අලුත් කිරීමේ (රු. 1,000) ඉල්ලීම 100% නිවැරදිව ඇඩ්මින් ඩෑෂ්බෝඩ් හා WhatsApp වෙත යොමු විය!"
+                              } else {
+                                "✅ ලියාපදිංචිය සාර්ථකයි! ඔබගේ ඉල්ලීම 100% නිවැරදිව ඇඩ්මින් ඩෑෂ්බෝඩ් හා WhatsApp වෙත යොමු විය."
+                              },
+                              Toast.LENGTH_LONG
+                            ).show()
+                            launchAdminWhatsAppRequest(
+                              context = context,
+                              fullName = newAcc.fullName,
+                              phone = newAcc.usernameOrPhone,
+                              gradePackage = newAcc.requestedGradePackage,
+                              deviceName = currDevName,
+                              isRenewal = isRenewalFlag,
+                              hasSlip = newAcc.slipImageUri != null
+                            )
+                            regName = ""
+                            regPhone = lockedDevicePhone ?: cleanPhone
+                            regPassword = ""
+                            regSlipUri = null
+                            regSlipDataUri = null
+                            regSlipName = null
+                          }
+                        }
+                      }.onFailure { err ->
                         Toast.makeText(
                           context,
-                          if (isExpiredRenewal) {
-                            "✅ මාස 6 අලුත් කිරීමේ (රු. 1,000) ඉල්ලීම ඇඩ්මින් ඩෑෂ්බෝඩ් හා WhatsApp වෙත යොමු විය!"
-                          } else {
-                            "✅ ලියාපදිංචිය සාර්ථකයි! ඔබගේ ඉල්ලීම ඇඩ්මින් ඩෑෂ්බෝඩ් හා WhatsApp වෙත යොමු විය."
-                          },
-                          Toast.LENGTH_LONG
-                        ).show()
-                      } else {
-                        Toast.makeText(
-                          context,
-                          "⚠️ ලියාපදිංචිය සුරැකුණි, නමුත් Cloud Sync අසාර්ථකයි: ${syncRes.exceptionOrNull()?.localizedMessage ?: "අන්තර්ජාලය පරීක්ෂා කරන්න"}",
+                          "⚠️ Cloud Sync අසාර්ථකයි: ${err.localizedMessage ?: "අන්තර්ජාලය පරීක්ෂා කර නැවත උත්සාහ කරන්න"}",
                           Toast.LENGTH_LONG
                         ).show()
                       }
-                      launchAdminWhatsAppRequest(
-                        context = context,
-                        fullName = newAcc.fullName,
-                        phone = newAcc.usernameOrPhone,
-                        gradePackage = newAcc.requestedGradePackage,
-                        deviceName = currDevName,
-                        isRenewal = isExpiredRenewal,
-                        hasSlip = newAcc.slipImageUri != null
-                      )
-                      regName = ""
-                      regPhone = lockedDevicePhone ?: cleanPhone
-                      regPassword = ""
-                      regSlipUri = null
-                      regSlipDataUri = null
-                      regSlipName = null
+                    } catch (_: CancellationException) {
+                      regCloudWaitVisible = false
+                      isSubmittingRequest = false
+                    } finally {
+                      regActiveCloudJob = null
                     }
                   }
                 }
 
-                // Automatic Cloud Sync (Google Sign-In) before registration if Firebase is initialized
+                // Wait for validated internet first, then perform Google Sign-In + Cloud Sync
                 val isFirebaseReady = try {
                   com.google.firebase.FirebaseApp.getApps(context).isNotEmpty()
                 } catch (_: Throwable) {
@@ -10367,34 +10786,65 @@ fun LoginAndApprovalDialog(
                     false
                   }
                   if (!hasSignedInUser) {
-                    isGoogleSigningIn = true
-                    googleSignInErrorMsg = null
-                    onGoogleSignInClicked(
-                      context = context,
-                      credentialManager = CredentialManager.create(context),
-                      onAuthSuccess = {
-                        isGoogleSigningIn = false
-                        signedInGoogleEmail = try {
-                          com.google.firebase.Firebase.auth.currentUser?.email ?: "Connected"
-                        } catch (_: Throwable) {
-                          "Connected"
+                    val launchGoogleAuthFlow = {
+                      isGoogleSigningIn = true
+                      googleSignInErrorMsg = null
+                      onGoogleSignInClicked(
+                        context = context,
+                        credentialManager = CredentialManager.create(context),
+                        onAuthSuccess = {
+                          isGoogleSigningIn = false
+                          signedInGoogleEmail = try {
+                            com.google.firebase.Firebase.auth.currentUser?.email ?: "Connected"
+                          } catch (_: Throwable) {
+                            "Connected"
+                          }
+                          googleSignInErrorMsg = null
+                          submitOrActivate()
+                        },
+                        onAuthError = { err ->
+                          isGoogleSigningIn = false
+                          googleSignInErrorMsg = err
+                          Toast.makeText(context, "⚠️ Google Sign-In අසාර්ථකයි: $err", Toast.LENGTH_LONG).show()
+                        },
+                        scope = coroutineScope,
+                        onAuthCancelled = { detail ->
+                          isGoogleSigningIn = false
+                          val detailNote = if (!detail.isNullOrBlank()) " ($detail)" else ""
+                          googleSignInErrorMsg = "Google ගිණුම තෝරා අවසර ලබාදීම අවලංගු විය$detailNote"
+                          Toast.makeText(context, "⚠️ ලියාපදිංචිය සඳහා Google ගිණුම තෝරා අවසර ලබාදෙන්න$detailNote", Toast.LENGTH_LONG).show()
                         }
-                        googleSignInErrorMsg = null
-                        submitOrActivate()
-                      },
-                      onAuthError = { err ->
-                        isGoogleSigningIn = false
-                        googleSignInErrorMsg = err
-                        Toast.makeText(context, "⚠️ Google Sign-In අසාර්ථකයි: $err", Toast.LENGTH_LONG).show()
-                      },
-                      scope = coroutineScope,
-                      onAuthCancelled = { detail ->
-                        isGoogleSigningIn = false
-                        val detailNote = if (!detail.isNullOrBlank()) " ($detail)" else ""
-                        googleSignInErrorMsg = "Google ගිණුම තෝරා අවසර ලබාදීම අවලංගු විය$detailNote"
-                        Toast.makeText(context, "⚠️ ලියාපදිංචිය සඳහා Google ගිණුම තෝරා අවසර ලබාදෙන්න$detailNote", Toast.LENGTH_LONG).show()
+                      )
+                    }
+
+                    if (!CloudAuthManager.hasProperInternet(context)) {
+                      regCloudWaitTitle = "📡 අන්තර්ජාල සබඳතාව අවශ්‍යයි"
+                      regCloudWaitOffline = true
+                      regCloudWaitMessage = "අන්තර්ජාල සබඳතාව අවශ්‍යයි! නියමිත මට්ටමේ අන්තර්ජාල සබඳතාවක් ලැබෙන තෙක් කැරකෙමින් රැඳී සිටී..."
+                      regCloudWaitVisible = true
+                      regActiveCloudJob = coroutineScope.launch {
+                        try {
+                          val netReady = CloudAuthManager.awaitProperInternetAndRun(
+                            context = context,
+                            onStatusUpdate = { waiting, msg ->
+                              regCloudWaitOffline = waiting
+                              regCloudWaitMessage = msg
+                            },
+                            block = { Result.success(Unit) }
+                          )
+                          regCloudWaitVisible = false
+                          if (netReady.isSuccess) {
+                            launchGoogleAuthFlow()
+                          }
+                        } catch (_: CancellationException) {
+                          regCloudWaitVisible = false
+                        } finally {
+                          regActiveCloudJob = null
+                        }
                       }
-                    )
+                    } else {
+                      launchGoogleAuthFlow()
+                    }
                   } else {
                     submitOrActivate()
                   }
@@ -10402,7 +10852,7 @@ fun LoginAndApprovalDialog(
                   submitOrActivate()
                 }
               },
-              enabled = !isSubmittingRequest && !isGoogleSigningIn,
+              enabled = !isSubmittingRequest && !isGoogleSigningIn && !regCloudWaitVisible,
               colors = ButtonDefaults.buttonColors(containerColor = if (isRenewalMode) Color(0xFFB91C1C) else Color(0xFF137333)),
               shape = RoundedCornerShape(12.dp),
               modifier = Modifier.fillMaxWidth().height(48.dp)
@@ -10434,56 +10884,96 @@ fun LoginAndApprovalDialog(
                   selectedTab = 1
                   return@OutlinedButton
                 }
-                if (!isCheckingCloudStatus) {
+                if (!isCheckingCloudStatus && !regCloudWaitVisible) {
                   isCheckingCloudStatus = true
-                  coroutineScope.launch {
-                    val fetchRes = CloudAuthManager.fetchUserFromCloud(context, cleanPhone)
-                    isCheckingCloudStatus = false
-                    fetchRes.onSuccess { cloudUser ->
-                      val normPhone = CloudAuthManager.normalizePhoneKey(cleanPhone)
-                      val candidate = cloudUser ?: registeredUsers.find {
-                        CloudAuthManager.normalizePhoneKey(it.usernameOrPhone) == normPhone
-                      }
-                      if (candidate == null || isAuthorizedAdminUser(candidate.usernameOrPhone)) {
-                        Toast.makeText(context, "මෙම අංකයෙන් ඉල්ලීමක් හමු නොවීය. කරුණාකර ඉහත විස්තර පුරවා ලියාපදිංචි වන්න.", Toast.LENGTH_LONG).show()
-                      } else if (candidate.isApproved && !candidate.isApprovalExpired()) {
-                        if (candidate.boundDeviceId != null && candidate.boundDeviceId != currDevId) {
-                          deviceLockedUserForAlert = candidate
+                  regCloudWaitTitle = "🔍 ගිණුමේ තත්ත්වය පරීක්ෂා කරමින්..."
+                  regCloudWaitOffline = !CloudAuthManager.hasProperInternet(context)
+                  regCloudWaitMessage = if (regCloudWaitOffline) {
+                    "අන්තර්ජාල සබඳතාව අවශ්‍යයි! නියමිත මට්ටමේ අන්තර්ජාල සබඳතාවක් ලැබෙන තෙක් කැරකෙමින් රැඳී සිටී..."
+                  } else {
+                    "Cloud Server සමඟ සම්බන්ධ වී 100% තහවුරු කරමින්..."
+                  }
+                  regCloudWaitVisible = true
+                  regActiveCloudJob = coroutineScope.launch {
+                    try {
+                      val fetchRes = CloudAuthManager.awaitProperInternetAndRun(
+                        context = context,
+                        onStatusUpdate = { waiting, msg ->
+                          regCloudWaitOffline = waiting
+                          regCloudWaitMessage = msg
+                        },
+                        block = {
+                          val strictRes = CloudAuthManager.fetchUserFromCloudStrict(context, cleanPhone)
+                          if (strictRes.isFailure) return@awaitProperInternetAndRun strictRes
+                          val cloudUser = strictRes.getOrNull()
+                          if (cloudUser != null && cloudUser.isApproved && !cloudUser.isApprovalExpired() && cloudUser.boundDeviceId == null) {
+                            val (_, currDevNameLocal) = getDeviceIdentifier(context)
+                            val activated = cloudUser.copy(
+                              boundDeviceId = currDevId,
+                              boundDeviceName = cloudUser.boundDeviceName ?: currDevNameLocal
+                            )
+                            val bindRes = CloudAuthManager.syncUserToCloudVerified(context, activated)
+                            if (bindRes.isFailure) return@awaitProperInternetAndRun Result.failure(bindRes.exceptionOrNull()!!)
+                            return@awaitProperInternetAndRun Result.success(activated)
+                          }
+                          Result.success(cloudUser)
+                        }
+                      )
+                      regCloudWaitVisible = false
+                      isCheckingCloudStatus = false
+                      fetchRes.onSuccess { cloudUser ->
+                        val normPhone = CloudAuthManager.normalizePhoneKey(cleanPhone)
+                        val candidate = cloudUser
+                        if (candidate == null) {
+                          val removed = registeredUsers.removeAll {
+                            !isAuthorizedAdminUser(it.usernameOrPhone) &&
+                              CloudAuthManager.normalizePhoneKey(it.usernameOrPhone) == normPhone
+                          }
+                          if (removed) onUsersUpdated()
+                        }
+                        if (candidate == null || isAuthorizedAdminUser(candidate.usernameOrPhone)) {
+                          Toast.makeText(context, "මෙම අංකයෙන් ඉල්ලීමක් හමු නොවීය. කරුණාකර ඉහත විස්තර පුරවා ලියාපදිංචි වන්න.", Toast.LENGTH_LONG).show()
+                        } else if (candidate.isApproved && !candidate.isApprovalExpired()) {
+                          if (candidate.boundDeviceId != null && candidate.boundDeviceId != currDevId) {
+                            deviceLockedUserForAlert = candidate
+                          } else {
+                            val (_, currDevNameLocal) = getDeviceIdentifier(context)
+                            val activated = candidate.copy(
+                              boundDeviceId = candidate.boundDeviceId ?: currDevId,
+                              boundDeviceName = candidate.boundDeviceName ?: currDevNameLocal
+                            )
+                            val idx = registeredUsers.indexOfFirst {
+                              CloudAuthManager.normalizePhoneKey(it.usernameOrPhone) == normPhone
+                            }
+                            if (idx >= 0) registeredUsers[idx] = activated else registeredUsers.add(0, activated)
+                            onUsersUpdated()
+                            Toast.makeText(context, "✅ ගිණුම අනුමතයි! සාදරයෙන් පිළිගනිමු ${activated.fullName}", Toast.LENGTH_LONG).show()
+                            onLoginSuccess(activated)
+                          }
+                        } else if (candidate.isApprovalExpired()) {
+                          Toast.makeText(context, "⚠️ මාස 6 කාලය අවසන් වී ඇත. ඉහත බොත්තමෙන් නැවත අලුත් කිරීමේ ඉල්ලීම යවන්න.", Toast.LENGTH_LONG).show()
                         } else {
-                          val (_, currDevName) = getDeviceIdentifier(context)
-                          val activated = candidate.copy(
-                            boundDeviceId = candidate.boundDeviceId ?: currDevId,
-                            boundDeviceName = candidate.boundDeviceName ?: currDevName
-                          )
+                          saveLoggedInUserPhone(context, candidate.usernameOrPhone)
                           val idx = registeredUsers.indexOfFirst {
                             CloudAuthManager.normalizePhoneKey(it.usernameOrPhone) == normPhone
                           }
-                          if (idx >= 0) registeredUsers[idx] = activated else registeredUsers.add(0, activated)
-                          if (candidate.boundDeviceId == null) {
-                            CloudAuthManager.syncUserToCloud(context, activated)
-                          }
+                          if (idx < 0) registeredUsers.add(0, candidate)
                           onUsersUpdated()
-                          Toast.makeText(context, "✅ ගිණුම අනුමතයි! සාදරයෙන් පිළිගනිමු ${activated.fullName}", Toast.LENGTH_LONG).show()
-                          onLoginSuccess(activated)
+                          Toast.makeText(context, "⏳ ඔබගේ ගිණුම තවම ඇඩ්මින් අනුමැතියට පොරොත්තුවෙන් පවතී.", Toast.LENGTH_LONG).show()
                         }
-                      } else if (candidate.isApprovalExpired()) {
-                        Toast.makeText(context, "⚠️ මාස 6 කාලය අවසන් වී ඇත. ඉහත බොත්තමෙන් නැවත අලුත් කිරීමේ ඉල්ලීම යවන්න.", Toast.LENGTH_LONG).show()
-                      } else {
-                        saveLoggedInUserPhone(context, candidate.usernameOrPhone)
-                        val idx = registeredUsers.indexOfFirst {
-                          CloudAuthManager.normalizePhoneKey(it.usernameOrPhone) == normPhone
-                        }
-                        if (idx < 0) registeredUsers.add(0, candidate)
-                        onUsersUpdated()
-                        Toast.makeText(context, "⏳ ඔබගේ ගිණුම තවම ඇඩ්මින් අනුමැතියට පොරොත්තුවෙන් පවතී.", Toast.LENGTH_LONG).show()
+                      }.onFailure { err ->
+                        Toast.makeText(context, "⚠️ Cloud පරීක්ෂාව අසාර්ථකයි: ${err.localizedMessage ?: "අන්තර්ජාලය පරීක්ෂා කරන්න"}", Toast.LENGTH_LONG).show()
                       }
-                    }.onFailure { err ->
-                      Toast.makeText(context, "⚠️ Cloud පරීක්ෂාව අසාර්ථකයි: ${err.localizedMessage ?: "අන්තර්ජාලය පරීක්ෂා කරන්න"}", Toast.LENGTH_LONG).show()
+                    } catch (_: CancellationException) {
+                      regCloudWaitVisible = false
+                      isCheckingCloudStatus = false
+                    } finally {
+                      regActiveCloudJob = null
                     }
                   }
                 }
               },
-              enabled = !isCheckingCloudStatus && !isSubmittingRequest,
+              enabled = !isCheckingCloudStatus && !isSubmittingRequest && !regCloudWaitVisible,
               shape = RoundedCornerShape(10.dp),
               border = BorderStroke(1.dp, Color(0xFF2563EB)),
               modifier = Modifier.fillMaxWidth().height(42.dp)
@@ -10612,6 +11102,16 @@ fun LoginAndApprovalDialog(
 
             Button(
               onClick = {
+                val lockKey = "admin_tab_login"
+                if (AppSecurityManager.isAccountLocked(lockKey)) {
+                  val secs = AppSecurityManager.getLockoutRemainingSeconds(lockKey)
+                  Toast.makeText(
+                    context,
+                    "🔒 වැරදි උත්සාහයන් වැඩියි! කරුණාකර තත්පර $secs කට පසු නැවත උත්සාහ කරන්න.",
+                    Toast.LENGTH_LONG
+                  ).show()
+                  return@Button
+                }
                 val cleanAdminInput = adminPhoneOrEmail.trim()
                 val cleanUser = adminUsername.trim()
                 val cleanNic = adminNic.trim()
@@ -10620,18 +11120,21 @@ fun LoginAndApprovalDialog(
                 val isStep2Valid = isValidAdminStep2Credentials(cleanUser, cleanNic, cleanPass)
 
                 if (!isAuthorized) {
+                  AppSecurityManager.recordFailedLogin(lockKey)
                   Toast.makeText(
                     context,
                     "❌ අනවසර ප්‍රවේශයකි! මෙම දුරකථන අංකය හෝ Email එක ඇඩ්මින් ගිණුමක් ලෙස අනුමත කර නොමැත.",
                     Toast.LENGTH_LONG
                   ).show()
                 } else if (!isStep2Valid) {
+                  val lockedNow = AppSecurityManager.recordFailedLogin(lockKey)
                   Toast.makeText(
                     context,
-                    "❌ ඇඩ්මින් පරිශීලක නාමය (Username), NIC අංකය හෝ මුරපදය (Password) වැරදියි!",
+                    if (lockedNow) "🔒 වැරදි උත්සාහයන් 5ක්! තත්පර 60කට අවහිර කරන ලදී." else "❌ ඇඩ්මින් පරිශීලක නාමය (Username), NIC අංකය හෝ මුරපදය (Password) වැරදියි!",
                     Toast.LENGTH_LONG
                   ).show()
                 } else {
+                  AppSecurityManager.resetFailedLogins(lockKey)
                   val adminUser = registeredUsers.find { isAuthorizedAdminUser(it.usernameOrPhone) }
                     ?: UserAccount("1", "අකිල ප්‍රභාත් දිසානායක (Admin)", cleanAdminInput, cleanPass, isApproved = true, paymentStatus = "Approved", requestedGradePackage = "06 සිට 11 දක්වා සියලුම ශ්‍රේණි (All Grades Mega Pack)", approvedGrades = listOf("06", "07", "08", "09", "10", "11", "6 ශ්‍රේණිය", "7 ශ්‍රේණිය", "8 ශ්‍රේණිය", "9 ශ්‍රේණිය", "10 ශ්‍රේණිය", "11 ශ්‍රේණිය"))
                   setAdminSessionActive(context, true)
@@ -10651,6 +11154,7 @@ fun LoginAndApprovalDialog(
           }
         }
       }
+    }
     }
   }
 
@@ -10672,7 +11176,8 @@ fun LoginAndApprovalDialog(
         ) {
           Text("ලොගින් පිටුවට යන්න")
         }
-      }
+      },
+      properties = DialogProperties(securePolicy = AppSecurityManager.getSecureFlagPolicy())
     )
   }
 
@@ -10714,7 +11219,8 @@ fun LoginAndApprovalDialog(
         ) {
           Text("තේරුණා (Close)", fontSize = 12.sp, fontWeight = FontWeight.Bold)
         }
-      }
+      },
+      properties = DialogProperties(securePolicy = AppSecurityManager.getSecureFlagPolicy())
     )
   }
 }

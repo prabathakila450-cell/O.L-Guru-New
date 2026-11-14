@@ -35,6 +35,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 import com.example.ui.theme.*
 import kotlinx.coroutines.delay
 import java.text.SimpleDateFormat
@@ -1569,7 +1570,10 @@ fun QuizReviewDialog(
   userAnswers: Map<Int, Int>,
   onDismiss: () -> Unit
 ) {
-  Dialog(onDismissRequest = onDismiss) {
+  Dialog(
+    onDismissRequest = onDismiss,
+    properties = DialogProperties(securePolicy = AppSecurityManager.getSecureFlagPolicy())
+  ) {
     Card(
       shape = RoundedCornerShape(20.dp),
       colors = CardDefaults.cardColors(containerColor = Color.White),
@@ -1700,7 +1704,10 @@ fun QuizReviewDialog(
 
 @Composable
 fun AutomationScheduleDialog(onDismiss: () -> Unit) {
-  Dialog(onDismissRequest = onDismiss) {
+  Dialog(
+    onDismissRequest = onDismiss,
+    properties = DialogProperties(securePolicy = AppSecurityManager.getSecureFlagPolicy())
+  ) {
     Card(
       shape = RoundedCornerShape(20.dp),
       colors = CardDefaults.cardColors(containerColor = Color.White),
@@ -1874,7 +1881,10 @@ fun TimelineStepItem(time: String, title: String, desc: String, badge: String) {
 
 @Composable
 fun SystemArchitectureDialog(onDismiss: () -> Unit) {
-  Dialog(onDismissRequest = onDismiss) {
+  Dialog(
+    onDismissRequest = onDismiss,
+    properties = DialogProperties(securePolicy = AppSecurityManager.getSecureFlagPolicy())
+  ) {
     Card(
       shape = RoundedCornerShape(20.dp),
       colors = CardDefaults.cardColors(containerColor = Color.White),

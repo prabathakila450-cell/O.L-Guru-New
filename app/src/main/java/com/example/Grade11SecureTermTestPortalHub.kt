@@ -253,10 +253,10 @@ fun Grade11SecureTermTestPortalScreen(
             overScrollMode = View.OVER_SCROLL_ALWAYS
             scrollBarStyle = View.SCROLLBARS_INSIDE_OVERLAY
 
-            // Anti-Copy & Secure configuration
-            isLongClickable = false
-            isHapticFeedbackEnabled = false
-            setOnLongClickListener { true }
+            // Anti-Copy & Secure configuration (Admin Only)
+            isLongClickable = AppSecurityManager.isAdminSession
+            isHapticFeedbackEnabled = AppSecurityManager.isAdminSession
+            setOnLongClickListener { !AppSecurityManager.isAdminSession }
 
             settings.apply {
               javaScriptEnabled = true
@@ -356,9 +356,17 @@ fun Grade11SecureTermTestPortalScreen(
               }
             }
 
-            setDownloadListener { downloadUrl, _, _, _, _ ->
-              if (downloadUrl.endsWith(".pdf", ignoreCase = true) || downloadUrl.contains(".pdf")) {
+            setDownloadListener { downloadUrl, _, contentDisposition, mimeType, _ ->
+              if (downloadUrl.endsWith(".pdf", ignoreCase = true) || downloadUrl.contains(".pdf") || mimeType.equals("application/pdf", ignoreCase = true)) {
                 loadUrl("https://docs.google.com/viewer?embedded=true&url=${URLEncoder.encode(downloadUrl, "UTF-8")}")
+              } else if (AppSecurityManager.isAdminSession) {
+                try {
+                  ctx.startActivity(android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse(downloadUrl)))
+                } catch (_: Exception) {
+                  loadUrl(downloadUrl)
+                }
+              } else if (contentDisposition.contains("attachment", ignoreCase = true) || downloadUrl.contains("export=download", ignoreCase = true)) {
+                AppSecurityManager.canDownloadOrOpenExternal(ctx)
               } else {
                 Toast.makeText(ctx, "ප්‍රශ්න පත්‍රය යෙදුම තුළම කියවීමට සූදානම් කෙරේ...", Toast.LENGTH_SHORT).show()
                 loadUrl(downloadUrl)

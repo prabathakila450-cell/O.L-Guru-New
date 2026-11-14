@@ -710,7 +710,10 @@ fun MathUnitDetailDialog(
 
   Dialog(
     onDismissRequest = onDismiss,
-    properties = DialogProperties(usePlatformDefaultWidth = false)
+    properties = DialogProperties(
+      usePlatformDefaultWidth = false,
+      securePolicy = AppSecurityManager.getSecureFlagPolicy()
+    )
   ) {
     Surface(
       shape = RoundedCornerShape(16.dp),
@@ -1332,7 +1335,10 @@ fun MathQuickFormulaCalculatorDialog(
 ) {
   var selectedTool by remember { mutableIntStateOf(0) } // 0: Arithmetic Progression (Tn), 1: Cylinder Volume, 2: Simple Interest
 
-  Dialog(onDismissRequest = onDismiss) {
+  Dialog(
+    onDismissRequest = onDismiss,
+    properties = DialogProperties(securePolicy = AppSecurityManager.getSecureFlagPolicy())
+  ) {
     Card(
       shape = RoundedCornerShape(16.dp),
       colors = CardDefaults.cardColors(containerColor = Color.White),

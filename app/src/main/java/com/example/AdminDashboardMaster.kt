@@ -5,6 +5,8 @@ import android.content.Intent
 import android.net.Uri
 import android.widget.Toast
 import androidx.lifecycle.lifecycleScope
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.BorderStroke
@@ -180,9 +182,80 @@ fun AdminDashboardMasterDialog(
   var newAdminPass by remember { mutableStateOf("") }
   var showAdminPassEdit by remember { mutableStateOf(false) }
 
+  // Verified Cloud Internet Wait State
+  var cloudWaitVisible by remember { mutableStateOf(false) }
+  var cloudWaitIsOffline by remember { mutableStateOf(false) }
+  var cloudWaitTitle by remember { mutableStateOf("☁️ Cloud වෙත යවමින්...") }
+  var cloudWaitMessage by remember { mutableStateOf("") }
+  var activeCloudJob by remember { mutableStateOf<Job?>(null) }
+
+  fun <T> runVerifiedAdminCloudTask(
+    title: String,
+    taskBlock: suspend () -> Result<T>,
+    onVerifiedSuccess: (T) -> Unit,
+    onNonNetworkFailure: (Throwable?) -> Unit = { err ->
+      Toast.makeText(
+        context,
+        "⚠️ Cloud ක්‍රියාවලිය අසාර්ථකයි: ${err?.localizedMessage ?: "දෝෂයකි"}",
+        Toast.LENGTH_LONG
+      ).show()
+    }
+  ) {
+    if (cloudWaitVisible) return
+    cloudWaitTitle = title
+    cloudWaitIsOffline = !CloudAuthManager.hasProperInternet(context)
+    cloudWaitMessage = if (cloudWaitIsOffline) {
+      "අන්තර්ජාල සබඳතාව අවශ්‍යයි! නියමිත මට්ටමේ අන්තර්ජාල සබඳතාවක් ලැබෙන තෙක් කැරකෙමින් රැඳී සිටී..."
+    } else {
+      "Cloud Server සමඟ සම්බන්ධ වී 100% තහවුරු කරමින්..."
+    }
+    cloudWaitVisible = true
+    activeCloudJob = coroutineScope.launch {
+      try {
+        val result = CloudAuthManager.awaitProperInternetAndRun(
+          context = context,
+          onStatusUpdate = { waiting, msg ->
+            cloudWaitIsOffline = waiting
+            cloudWaitMessage = msg
+          },
+          block = taskBlock
+        )
+        cloudWaitVisible = false
+        result.onSuccess { data ->
+          onVerifiedSuccess(data)
+        }.onFailure { err ->
+          onNonNetworkFailure(err)
+        }
+      } catch (_: CancellationException) {
+        cloudWaitVisible = false
+      } catch (t: Throwable) {
+        cloudWaitVisible = false
+        onNonNetworkFailure(t)
+      } finally {
+        activeCloudJob = null
+      }
+    }
+  }
+
+  CloudInternetWaitDialog(
+    visible = cloudWaitVisible,
+    isWaitingForInternet = cloudWaitIsOffline,
+    title = cloudWaitTitle,
+    statusMessage = cloudWaitMessage,
+    onCancel = {
+      activeCloudJob?.cancel()
+      activeCloudJob = null
+      cloudWaitVisible = false
+      Toast.makeText(context, "ක්‍රියාවලිය නවත්වන ලදී. Cloud වෙත යොමු නොවුණි.", Toast.LENGTH_SHORT).show()
+    }
+  )
+
   Dialog(
     onDismissRequest = onDismiss,
-    properties = DialogProperties(usePlatformDefaultWidth = false)
+    properties = DialogProperties(
+      usePlatformDefaultWidth = false,
+      securePolicy = AppSecurityManager.getSecureFlagPolicy()
+    )
   ) {
     Box(
       modifier = Modifier
@@ -261,60 +334,50 @@ fun AdminDashboardMasterDialog(
               }
 
               Row(verticalAlignment = Alignment.CenterVertically) {
-                var isCloudRefreshing by remember { mutableStateOf(false) }
                 // Cloud Sync Refresh Button
                 OutlinedButton(
                   onClick = {
-                    if (!isCloudRefreshing) {
-                      isCloudRefreshing = true
-                      coroutineScope.launch {
-                        val res = CloudAuthManager.fetchAllUsersFromCloud(context)
-                        isCloudRefreshing = false
-                        res.onSuccess { cloudUsers ->
-                          cloudUsers.forEach { cloudUser ->
-                            val normCloud = CloudAuthManager.normalizePhoneKey(cloudUser.usernameOrPhone)
-                            val existingIdx = registeredUsers.indexOfFirst {
-                              CloudAuthManager.normalizePhoneKey(it.usernameOrPhone) == normCloud
-                            }
-                            if (existingIdx >= 0) {
-                              val local = registeredUsers[existingIdx]
-                              registeredUsers[existingIdx] = local.copy(
-                                fullName = cloudUser.fullName.ifBlank { local.fullName },
-                                password = cloudUser.password.ifBlank { local.password },
-                                isApproved = cloudUser.isApproved,
-                                approvalTimestamp = cloudUser.approvalTimestamp,
-                                paymentStatus = cloudUser.paymentStatus,
-                                requestedGradePackage = cloudUser.requestedGradePackage.ifBlank { local.requestedGradePackage },
-                                approvedGrades = if (cloudUser.approvedGrades.isNotEmpty()) cloudUser.approvedGrades else local.approvedGrades,
-                                boundDeviceId = cloudUser.boundDeviceId,
-                                boundDeviceName = cloudUser.boundDeviceName,
-                                boundDate = cloudUser.boundDate,
-                                slipImageUri = cloudUser.slipImageUri ?: local.slipImageUri,
-                                requestDate = cloudUser.requestDate ?: local.requestDate,
-                                requestTimestamp = cloudUser.requestTimestamp ?: local.requestTimestamp
-                              )
-                            } else {
-                              registeredUsers.add(cloudUser)
-                            }
+                    runVerifiedAdminCloudTask(
+                      title = "☁️ Cloud දත්ත යාවත්කාලීන කරමින්...",
+                      taskBlock = { CloudAuthManager.fetchAllUsersFromCloudStrict(context) },
+                      onVerifiedSuccess = { cloudUsers ->
+                        cloudUsers.forEach { cloudUser ->
+                          val normCloud = CloudAuthManager.normalizePhoneKey(cloudUser.usernameOrPhone)
+                          val existingIdx = registeredUsers.indexOfFirst {
+                            CloudAuthManager.normalizePhoneKey(it.usernameOrPhone) == normCloud
                           }
-                          onUsersUpdated()
-                          val pNow = registeredUsers.count { !it.isApproved && !isAuthorizedAdminUser(it.usernameOrPhone) }
-                          Toast.makeText(
-                            context,
-                            "☁️ Cloud යාවත්කාලීන විය! අනුමැතියට: $pNow",
-                            Toast.LENGTH_SHORT
-                          ).show()
-                        }.onFailure { err ->
-                          Toast.makeText(
-                            context,
-                            "⚠️ Cloud Sync අසාර්ථකයි: ${err.localizedMessage ?: "අන්තර්ජාලය පරීක්ෂා කරන්න"}",
-                            Toast.LENGTH_LONG
-                          ).show()
+                          if (existingIdx >= 0) {
+                            val local = registeredUsers[existingIdx]
+                            registeredUsers[existingIdx] = local.copy(
+                              fullName = cloudUser.fullName.ifBlank { local.fullName },
+                              password = cloudUser.password.ifBlank { local.password },
+                              isApproved = cloudUser.isApproved,
+                              approvalTimestamp = cloudUser.approvalTimestamp,
+                              paymentStatus = cloudUser.paymentStatus,
+                              requestedGradePackage = cloudUser.requestedGradePackage.ifBlank { local.requestedGradePackage },
+                              approvedGrades = if (!cloudUser.isApproved) cloudUser.approvedGrades else if (cloudUser.approvedGrades.isNotEmpty()) cloudUser.approvedGrades else local.approvedGrades,
+                              boundDeviceId = cloudUser.boundDeviceId,
+                              boundDeviceName = cloudUser.boundDeviceName,
+                              boundDate = cloudUser.boundDate,
+                              slipImageUri = cloudUser.slipImageUri ?: local.slipImageUri,
+                              requestDate = cloudUser.requestDate ?: local.requestDate,
+                              requestTimestamp = cloudUser.requestTimestamp ?: local.requestTimestamp
+                            )
+                          } else {
+                            registeredUsers.add(cloudUser)
+                          }
                         }
+                        onUsersUpdated()
+                        val pNow = registeredUsers.count { !it.isApproved && !isAuthorizedAdminUser(it.usernameOrPhone) }
+                        Toast.makeText(
+                          context,
+                          "☁️ 100% නිවැරදිව Cloud යාවත්කාලීන විය! අනුමැතියට: $pNow",
+                          Toast.LENGTH_SHORT
+                        ).show()
                       }
-                    }
+                    )
                   },
-                  enabled = !isCloudRefreshing,
+                  enabled = !cloudWaitVisible,
                   colors = ButtonDefaults.outlinedButtonColors(contentColor = Color(0xFF38BDF8)),
                   border = BorderStroke(1.dp, Color(0xFF38BDF8)),
                   shape = RoundedCornerShape(8.dp),
@@ -323,7 +386,7 @@ fun AdminDashboardMasterDialog(
                 ) {
                   Icon(Icons.Default.Refresh, contentDescription = "Sync Cloud", modifier = Modifier.size(14.dp))
                   Spacer(modifier = Modifier.width(3.dp))
-                  Text(if (isCloudRefreshing) "..." else "Sync", fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                  Text(if (cloudWaitVisible) "..." else "Sync", fontSize = 10.sp, fontWeight = FontWeight.Bold)
                 }
 
                 Spacer(modifier = Modifier.width(6.dp))
@@ -472,7 +535,14 @@ fun AdminDashboardMasterDialog(
                   onFilterStatusChange = { userFilterStatus = it },
                   onUsersUpdated = onUsersUpdated,
                   onPreviewReceipt = onPreviewReceipt,
-                  coroutineScope = coroutineScope
+                  cloudWaitVisible = cloudWaitVisible,
+                  onRunVerifiedCloudTask = { title, taskBlock, onSuccess ->
+                    runVerifiedAdminCloudTask(
+                      title = title,
+                      taskBlock = taskBlock,
+                      onVerifiedSuccess = { onSuccess() }
+                    )
+                  }
                 )
               }
               1 -> {
@@ -571,7 +641,12 @@ private fun UserManagementSection(
   onFilterStatusChange: (String) -> Unit,
   onUsersUpdated: () -> Unit,
   onPreviewReceipt: (String) -> Unit,
-  coroutineScope: kotlinx.coroutines.CoroutineScope
+  cloudWaitVisible: Boolean,
+  onRunVerifiedCloudTask: (
+    title: String,
+    taskBlock: suspend () -> Result<Unit>,
+    onVerifiedSuccess: () -> Unit
+  ) -> Unit
 ) {
   val context = LocalContext.current
   val isCloudReady = remember { CloudAuthManager.isCloudAvailable(context) }
@@ -829,117 +904,126 @@ private fun UserManagementSection(
         AdminUserItemCard(
           user = user,
           onApprove = {
-            val idx = registeredUsers.indexOf(user)
-            if (idx != -1) {
-              val gradesToAssign = getApprovedGradesForPackage(user.requestedGradePackage)
-              val updatedUser = user.copy(
-                isApproved = true,
-                paymentStatus = "Approved",
-                approvedGrades = gradesToAssign,
-                approvalTimestamp = System.currentTimeMillis()
-              )
-              registeredUsers[idx] = updatedUser
-              onUsersUpdated()
-
-              // Cloud Sync
-              coroutineScope.launch {
-                val res = CloudAuthManager.syncUserToCloud(context, updatedUser)
-                if (res.isSuccess) {
-                  Toast.makeText(context, "✅ ${user.fullName} මාස 6කට අනුමත කර Cloud වෙත යවන ලදී!", Toast.LENGTH_SHORT).show()
-                } else {
-                  Toast.makeText(context, "⚠️ අනුමත කළ නමුත් Cloud Sync අසාර්ථකයි: ${res.exceptionOrNull()?.localizedMessage ?: ""}", Toast.LENGTH_LONG).show()
-                }
+            val gradesToAssign = getApprovedGradesForPackage(user.requestedGradePackage)
+            val updatedUser = user.copy(
+              isApproved = true,
+              paymentStatus = "Approved",
+              approvedGrades = gradesToAssign,
+              approvalTimestamp = System.currentTimeMillis()
+            )
+            onRunVerifiedCloudTask(
+              "✅ අනුමැතිය Cloud වෙත යවමින්...",
+              { CloudAuthManager.syncUserToCloudVerified(context, updatedUser) }
+            ) {
+              val normKey = CloudAuthManager.normalizePhoneKey(updatedUser.usernameOrPhone)
+              val idx = registeredUsers.indexOfFirst {
+                CloudAuthManager.normalizePhoneKey(it.usernameOrPhone) == normKey
               }
+              if (idx >= 0) registeredUsers[idx] = updatedUser else registeredUsers.add(0, updatedUser)
+              onUsersUpdated()
+              Toast.makeText(context, "✅ ${user.fullName} මාස 6කට 100% නිවැරදිව අනුමත කර Cloud වෙත යවන ලදී!", Toast.LENGTH_SHORT).show()
             }
           },
           onRevoke = {
-            val idx = registeredUsers.indexOf(user)
-            if (idx != -1) {
-              val updatedUser = user.copy(isApproved = false, paymentStatus = "Revoked")
-              registeredUsers[idx] = updatedUser
-              onUsersUpdated()
-
-              // Cloud Sync
-              coroutineScope.launch {
-                val res = CloudAuthManager.syncUserToCloud(context, updatedUser)
-                if (res.isFailure) {
-                  Toast.makeText(context, "⚠️ Cloud Sync අසාර්ථකයි: ${res.exceptionOrNull()?.localizedMessage ?: ""}", Toast.LENGTH_LONG).show()
-                }
+            val updatedUser = user.copy(isApproved = false, paymentStatus = "Revoked")
+            onRunVerifiedCloudTask(
+              "⛔ අවලංගු කිරීම Cloud වෙත යවමින්...",
+              { CloudAuthManager.syncUserToCloudVerified(context, updatedUser) }
+            ) {
+              val normKey = CloudAuthManager.normalizePhoneKey(updatedUser.usernameOrPhone)
+              val idx = registeredUsers.indexOfFirst {
+                CloudAuthManager.normalizePhoneKey(it.usernameOrPhone) == normKey
               }
-
-              Toast.makeText(context, "${user.fullName} අනුමැතිය අවලංගු කරන ලදී.", Toast.LENGTH_SHORT).show()
+              if (idx >= 0) registeredUsers[idx] = updatedUser
+              onUsersUpdated()
+              Toast.makeText(context, "${user.fullName} අනුමැතිය 100% නිවැරදිව අවලංගු කරන ලදී.", Toast.LENGTH_SHORT).show()
             }
           },
           onResetDeviceLock = {
-            val idx = registeredUsers.indexOf(user)
-            if (idx != -1) {
-              val updatedUser = user.copy(boundDeviceId = null, boundDeviceName = null, boundDate = null)
-              registeredUsers[idx] = updatedUser
-              onUsersUpdated()
-              coroutineScope.launch {
-                CloudAuthManager.syncUserToCloud(context, updatedUser)
+            val updatedUser = user.copy(boundDeviceId = null, boundDeviceName = null, boundDate = null)
+            onRunVerifiedCloudTask(
+              "📱 Device Lock ඉවත් කිරීම Cloud වෙත යවමින්...",
+              { CloudAuthManager.syncUserToCloudVerified(context, updatedUser) }
+            ) {
+              val normKey = CloudAuthManager.normalizePhoneKey(updatedUser.usernameOrPhone)
+              val idx = registeredUsers.indexOfFirst {
+                CloudAuthManager.normalizePhoneKey(it.usernameOrPhone) == normKey
               }
-              Toast.makeText(context, "📱 ${user.fullName} ගේ Device Lock එක ඉවත් කරන ලදී!", Toast.LENGTH_SHORT).show()
+              if (idx >= 0) registeredUsers[idx] = updatedUser
+              onUsersUpdated()
+              Toast.makeText(context, "📱 ${user.fullName} ගේ Device Lock එක 100% නිවැරදිව ඉවත් කරන ලදී!", Toast.LENGTH_SHORT).show()
             }
           },
           onToggleGrade = { gradeNum ->
-            val idx = registeredUsers.indexOf(user)
-            if (idx != -1) {
-              val current = user.approvedGrades.toMutableList()
-              if (current.contains(gradeNum)) {
-                current.remove(gradeNum)
-              } else {
-                current.add(gradeNum)
+            val current = user.approvedGrades.toMutableList()
+            if (current.contains(gradeNum)) {
+              current.remove(gradeNum)
+            } else {
+              current.add(gradeNum)
+            }
+            val updatedUser = user.copy(approvedGrades = current)
+            onRunVerifiedCloudTask(
+              "📚 ශ්‍රේණි වෙනස Cloud වෙත යවමින්...",
+              { CloudAuthManager.syncUserToCloudVerified(context, updatedUser) }
+            ) {
+              val normKey = CloudAuthManager.normalizePhoneKey(updatedUser.usernameOrPhone)
+              val idx = registeredUsers.indexOfFirst {
+                CloudAuthManager.normalizePhoneKey(it.usernameOrPhone) == normKey
               }
-              val updatedUser = user.copy(approvedGrades = current)
-              registeredUsers[idx] = updatedUser
+              if (idx >= 0) registeredUsers[idx] = updatedUser
               onUsersUpdated()
-              coroutineScope.launch {
-                CloudAuthManager.syncUserToCloud(context, updatedUser)
-              }
             }
           },
           onGrantOlCombo = {
-            val idx = registeredUsers.indexOf(user)
-            if (idx != -1) {
-              val updatedUser = user.copy(
-                approvedGrades = listOf("10", "11", "10 ශ්‍රේණිය", "11 ශ්‍රේණිය"),
-                isApproved = true,
-                paymentStatus = "Approved",
-                approvalTimestamp = System.currentTimeMillis()
-              )
-              registeredUsers[idx] = updatedUser
-              onUsersUpdated()
-              coroutineScope.launch {
-                CloudAuthManager.syncUserToCloud(context, updatedUser)
+            val updatedUser = user.copy(
+              approvedGrades = listOf("10", "11", "10 ශ්‍රේණිය", "11 ශ්‍රේණිය"),
+              isApproved = true,
+              paymentStatus = "Approved",
+              approvalTimestamp = System.currentTimeMillis()
+            )
+            onRunVerifiedCloudTask(
+              "✅ 10+11 O/L අනුමැතිය Cloud වෙත යවමින්...",
+              { CloudAuthManager.syncUserToCloudVerified(context, updatedUser) }
+            ) {
+              val normKey = CloudAuthManager.normalizePhoneKey(updatedUser.usernameOrPhone)
+              val idx = registeredUsers.indexOfFirst {
+                CloudAuthManager.normalizePhoneKey(it.usernameOrPhone) == normKey
               }
-              Toast.makeText(context, "${user.fullName} හට 10+11 O/L ප්‍රවේශය (මාස 6 / දින 180) ලබාදුනි!", Toast.LENGTH_SHORT).show()
+              if (idx >= 0) registeredUsers[idx] = updatedUser else registeredUsers.add(0, updatedUser)
+              onUsersUpdated()
+              Toast.makeText(context, "${user.fullName} හට 10+11 O/L ප්‍රවේශය (මාස 6 / දින 180) 100% නිවැරදිව ලබාදුනි!", Toast.LENGTH_SHORT).show()
             }
           },
           onGrantAllGrades = {
-            val idx = registeredUsers.indexOf(user)
-            if (idx != -1) {
-              val updatedUser = user.copy(
-                approvedGrades = listOf("06", "07", "08", "09", "10", "11", "6 ශ්‍රේණිය", "7 ශ්‍රේණිය", "8 ශ්‍රේණිය", "9 ශ්‍රේණිය", "10 ශ්‍රේණිය", "11 ශ්‍රේණිය"),
-                isApproved = true,
-                paymentStatus = "Approved",
-                approvalTimestamp = System.currentTimeMillis()
-              )
-              registeredUsers[idx] = updatedUser
-              onUsersUpdated()
-              coroutineScope.launch {
-                CloudAuthManager.syncUserToCloud(context, updatedUser)
+            val updatedUser = user.copy(
+              approvedGrades = listOf("06", "07", "08", "09", "10", "11", "6 ශ්‍රේණිය", "7 ශ්‍රේණිය", "8 ශ්‍රේණිය", "9 ශ්‍රේණිය", "10 ශ්‍රේණිය", "11 ශ්‍රේණිය"),
+              isApproved = true,
+              paymentStatus = "Approved",
+              approvalTimestamp = System.currentTimeMillis()
+            )
+            onRunVerifiedCloudTask(
+              "✅ සියලු ශ්‍රේණි අනුමැතිය Cloud වෙත යවමින්...",
+              { CloudAuthManager.syncUserToCloudVerified(context, updatedUser) }
+            ) {
+              val normKey = CloudAuthManager.normalizePhoneKey(updatedUser.usernameOrPhone)
+              val idx = registeredUsers.indexOfFirst {
+                CloudAuthManager.normalizePhoneKey(it.usernameOrPhone) == normKey
               }
-              Toast.makeText(context, "${user.fullName} හට සියලු ශ්‍රේණි (06-11) ප්‍රවේශය (මාස 6 / දින 180) ලබාදුනි!", Toast.LENGTH_SHORT).show()
+              if (idx >= 0) registeredUsers[idx] = updatedUser else registeredUsers.add(0, updatedUser)
+              onUsersUpdated()
+              Toast.makeText(context, "${user.fullName} හට සියලු ශ්‍රේණි (06-11) ප්‍රවේශය (මාස 6 / දින 180) 100% නිවැරදිව ලබාදුනි!", Toast.LENGTH_SHORT).show()
             }
           },
           onDelete = {
-            registeredUsers.remove(user)
-            onUsersUpdated()
-            coroutineScope.launch {
-              CloudAuthManager.deleteUserFromCloud(context, user.usernameOrPhone)
+            onRunVerifiedCloudTask(
+              "🗑️ ගිණුම Cloud වෙතින් මකාදමමින්...",
+              { CloudAuthManager.deleteUserFromCloudVerified(context, user.usernameOrPhone) }
+            ) {
+              val normKey = CloudAuthManager.normalizePhoneKey(user.usernameOrPhone)
+              registeredUsers.removeAll { CloudAuthManager.normalizePhoneKey(it.usernameOrPhone) == normKey }
+              onUsersUpdated()
+              Toast.makeText(context, "${user.fullName} ගිණුම 100% නිවැරදිව මකා දමන ලදී.", Toast.LENGTH_SHORT).show()
             }
-            Toast.makeText(context, "${user.fullName} ගිණුම මකා දමන ලදී.", Toast.LENGTH_SHORT).show()
           },
           onPreviewReceipt = { uri ->
             onPreviewReceipt(uri)
@@ -1044,25 +1128,24 @@ private fun UserManagementSection(
                 requestTimestamp = now
               )
             }
-            if (existingIdx >= 0) {
-              registeredUsers[existingIdx] = approvedAcc
-            } else {
-              registeredUsers.add(0, approvedAcc)
-            }
-            onUsersUpdated()
-            isSavingManual = true
-            coroutineScope.launch {
-              val res = CloudAuthManager.syncUserToCloud(context, approvedAcc)
-              isSavingManual = false
-              showManualApproveDialog = false
-              if (res.isSuccess) {
-                Toast.makeText(context, "✅ ${approvedAcc.fullName} සාර්ථකව අනුමත කර Cloud වෙත යවන ලදී!", Toast.LENGTH_LONG).show()
-              } else {
-                Toast.makeText(context, "⚠️ දේශීයව අනුමත විය, නමුත් Cloud Sync අසාර්ථකයි: ${res.exceptionOrNull()?.localizedMessage ?: ""}", Toast.LENGTH_LONG).show()
+            showManualApproveDialog = false
+            onRunVerifiedCloudTask(
+              "✅ ශිෂ්‍ය ගිණුම Cloud වෙත අනුමත කරමින්...",
+              { CloudAuthManager.syncUserToCloudVerified(context, approvedAcc) }
+            ) {
+              val matchIdx = registeredUsers.indexOfFirst {
+                CloudAuthManager.normalizePhoneKey(it.usernameOrPhone) == normPhone
               }
+              if (matchIdx >= 0) {
+                registeredUsers[matchIdx] = approvedAcc
+              } else {
+                registeredUsers.add(0, approvedAcc)
+              }
+              onUsersUpdated()
+              Toast.makeText(context, "✅ ${approvedAcc.fullName} 100% නිවැරදිව අනුමත කර Cloud වෙත යවන ලදී!", Toast.LENGTH_LONG).show()
             }
           },
-          enabled = !isSavingManual,
+          enabled = !isSavingManual && !cloudWaitVisible,
           colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF059669)),
           shape = RoundedCornerShape(8.dp)
         ) {
@@ -1076,7 +1159,8 @@ private fun UserManagementSection(
         ) {
           Text("අවලංගු කරන්න")
         }
-      }
+      },
+      properties = DialogProperties(securePolicy = AppSecurityManager.getSecureFlagPolicy())
     )
   }
 }
@@ -1540,7 +1624,8 @@ private fun AdminUserItemCard(
         ) {
           Text("අවලංගු කරන්න", fontSize = 12.sp)
         }
-      }
+      },
+      properties = DialogProperties(securePolicy = AppSecurityManager.getSecureFlagPolicy())
     )
   }
 
@@ -1590,7 +1675,8 @@ private fun AdminUserItemCard(
         ) {
           Text("අවලංගු කරන්න", fontSize = 12.sp)
         }
-      }
+      },
+      properties = DialogProperties(securePolicy = AppSecurityManager.getSecureFlagPolicy())
     )
   }
 }

@@ -41,6 +41,7 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 import android.speech.tts.TextToSpeech
+import androidx.compose.ui.window.DialogProperties
 
 // ==============================================================================
 // 🌟 INTERACTIVE Q&A MASTER HUB (ප්‍රශ්න හා පිළිතුරු පුහුණු මධ්‍යස්ථානය)
@@ -4015,7 +4016,8 @@ fun TrueFalse500Content(
           Text("වසන්න", color = Color(0xFFEC4899), fontWeight = FontWeight.Bold)
         }
       },
-      containerColor = Color(0xFF1E293B)
+      containerColor = Color(0xFF1E293B),
+      properties = DialogProperties(securePolicy = AppSecurityManager.getSecureFlagPolicy())
     )
   }
 
@@ -4144,7 +4146,8 @@ fun TrueFalse500Content(
           Text("හරි (Done)", fontWeight = FontWeight.Bold, fontSize = 11.5.sp)
         }
       },
-      containerColor = Color(0xFF1E293B)
+      containerColor = Color(0xFF1E293B),
+      properties = DialogProperties(securePolicy = AppSecurityManager.getSecureFlagPolicy())
     )
   }
 }

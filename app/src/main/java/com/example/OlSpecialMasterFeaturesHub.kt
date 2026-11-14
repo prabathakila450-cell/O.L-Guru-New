@@ -33,6 +33,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.window.DialogProperties
 
 // ==============================================================================
 // 🌟 O/L SPECIAL MASTER FEATURES HUB: ALL SUBJECT INTERACTIVE TOOL SUITE
@@ -1922,7 +1923,8 @@ fun CommerceDoubleEntryAndAccountsFeatureView() {
           Text("වසන්න", fontSize = 11.sp)
         }
       },
-      containerColor = Color(0xFF0F172A)
+      containerColor = Color(0xFF0F172A),
+      properties = DialogProperties(securePolicy = AppSecurityManager.getSecureFlagPolicy())
     )
   }
 }

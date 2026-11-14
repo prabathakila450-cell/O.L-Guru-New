@@ -422,13 +422,8 @@ fun CompleteEnglishDictionaryScreen(
                 // Copy to Clipboard (Admin only)
                 IconButton(
                   onClick = {
-                    if (AppSecurityManager.canCopyContent(context)) {
-                      val clipText = "${wordItem.word} (${wordItem.pos})\nසිංහල තේරුම: ${wordItem.sinhala}\nEnglish: ${wordItem.englishDef}\nExample: \"${wordItem.example}\""
-                      clipboardManager.setText(AnnotatedString(clipText))
-                      Toast.makeText(context, "පිටපත් කරගන්නා ලදී (Copied)", Toast.LENGTH_SHORT).show()
-                    } else {
-                      Toast.makeText(context, "ආරක්ෂක නීති අනුව සටහන් පිටපත් කිරීම (Copy) අවහිර කර ඇත (Admin Only).", Toast.LENGTH_SHORT).show()
-                    }
+                    val clipText = "${wordItem.word} (${wordItem.pos})\nසිංහල තේරුම: ${wordItem.sinhala}\nEnglish: ${wordItem.englishDef}\nExample: \"${wordItem.example}\""
+                    AppSecurityManager.copyTextIfAdmin(context, "word_item", clipText, "පිටපත් කරගන්නා ලදී (Copied)")
                   },
                   modifier = Modifier.size(30.dp)
                 ) {
