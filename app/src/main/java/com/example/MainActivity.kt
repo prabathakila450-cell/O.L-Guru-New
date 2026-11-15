@@ -55,6 +55,7 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
@@ -139,6 +140,7 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import android.content.ContextWrapper
 import android.content.MutableContextWrapper
+import androidx.credentials.ClearCredentialStateRequest
 import androidx.credentials.CredentialManager
 import androidx.credentials.CustomCredential
 import androidx.credentials.GetCredentialRequest
@@ -231,7 +233,8 @@ data class UserAccount(
   var boundDate: String? = null,
   var approvalTimestamp: Long? = null,
   var requestDate: String? = null,
-  var requestTimestamp: Long? = null
+  var requestTimestamp: Long? = null,
+  var googleEmail: String? = null
 )
 
 // Subscription Validity: 6 Months (දින 180 / රු. 1,000)
@@ -293,6 +296,7 @@ fun UserAccount.toJsonString(): String {
   json.put("approvalTimestamp", approvalTimestamp ?: 0L)
   json.put("requestDate", requestDate ?: "")
   json.put("requestTimestamp", requestTimestamp ?: 0L)
+  json.put("googleEmail", googleEmail ?: "")
   return json.toString()
 }
 
@@ -325,7 +329,8 @@ fun userAccountFromJsonString(jsonStr: String): UserAccount? {
       boundDate = json.optString("boundDate").takeIf { it.isNotBlank() },
       approvalTimestamp = appTimestamp,
       requestDate = reqDate,
-      requestTimestamp = reqTimestamp
+      requestTimestamp = reqTimestamp,
+      googleEmail = json.optString("googleEmail").takeIf { it.isNotBlank() }
     )
   } catch (e: Exception) {
     null
@@ -615,30 +620,33 @@ tailrec fun Context.findActivity(): ComponentActivity? = when (this) {
   else -> null
 }
 
-private const val DEFAULT_FIREBASE_WEB_CLIENT_ID = "616154457350-ors7kvk6l925c3mgglviprlb9vvr5ijf.apps.googleusercontent.com"
-
-@SuppressLint("DiscouragedApi")
 private fun resolveDefaultWebClientId(context: Context): String {
-  // 1. Dynamic lookup via namespace package "com.example"
-  try {
-    val resId = context.resources.getIdentifier("default_web_client_id", "string", "com.example")
-    if (resId != 0) {
-      val clientId = context.getString(resId)
-      if (clientId.isNotBlank()) return clientId
-    }
-  } catch (_: Throwable) {}
+  return try {
+    context.getString(R.string.default_web_client_id).trim()
+  } catch (_: Throwable) {
+    ""
+  }
+}
 
-  // 3. Lookup via runtime applicationId context.packageName
-  try {
-    val resId = context.resources.getIdentifier("default_web_client_id", "string", context.packageName)
-    if (resId != 0) {
-      val clientId = context.getString(resId)
-      if (clientId.isNotBlank()) return clientId
-    }
-  } catch (_: Throwable) {}
-
-  // 4. Guaranteed non-empty fallback Web Client ID from edu-lk-app google-services.json
-  return DEFAULT_FIREBASE_WEB_CLIENT_ID
+private fun isExplicitUserCancellation(ex: GetCredentialCancellationException): Boolean {
+  val msg = (ex.errorMessage?.toString() ?: ex.message ?: "").trim().lowercase()
+  if (msg.isBlank()) return true
+  val isProviderOrReauthError = msg.contains("[16]") ||
+    msg.contains("reauth") ||
+    msg.contains("account") ||
+    msg.contains("failed") ||
+    msg.contains("developer") ||
+    msg.contains("caller") ||
+    msg.contains("cannot find") ||
+    msg.contains("no credential") ||
+    msg.contains("10:") ||
+    msg.contains("28444")
+  if (isProviderOrReauthError) return false
+  return msg.contains("activity is cancelled by the user") ||
+    msg.contains("canceled by the user") ||
+    msg.contains("cancelled by the user") ||
+    msg.contains("user canceled") ||
+    msg.contains("user cancelled")
 }
 
 fun attemptAutoSignIn(
@@ -675,7 +683,7 @@ fun attemptAutoSignIn(
     .build()
   val request = GetCredentialRequest.Builder().addCredentialOption(googleIdOption).build()
   val activity = context.findActivity()
-  val targetContext: Context = activity ?: context
+  val targetContext: Context = if (activity != null) MutableContextWrapper(activity) else context
   val launchScope = activity?.lifecycleScope ?: scope
 
   launchScope.launch {
@@ -711,11 +719,12 @@ fun onGoogleSignInClicked(
   }
 
   val activity = context.findActivity()
-  val targetContext: Context = activity ?: context
+  val targetContext: Context = if (activity != null) MutableContextWrapper(activity) else context
+  val activeCredManager = if (activity != null) CredentialManager.create(activity) else credentialManager
   val launchScope = activity?.lifecycleScope ?: scope
 
   suspend fun signInWithOption(request: GetCredentialRequest): Boolean {
-    val result = credentialManager.getCredential(targetContext, request)
+    val result = activeCredManager.getCredential(targetContext, request)
     val credential = result.credential
     if (credential is CustomCredential && credential.type == TYPE_GOOGLE_ID_TOKEN_CREDENTIAL) {
       val googleIdToken = GoogleIdTokenCredential.createFrom(credential.data).idToken
@@ -736,13 +745,19 @@ fun onGoogleSignInClicked(
         onAuthError("Unexpected credential type")
       }
     } catch (primaryEx: GetCredentialException) {
-      Log.w("Auth", "Primary GetSignInWithGoogleOption failed (${primaryEx::class.java.simpleName}): ${primaryEx.errorMessage ?: primaryEx.message}", primaryEx)
-      if (primaryEx is GetCredentialCancellationException) {
-        val detail = primaryEx.errorMessage?.toString() ?: primaryEx.message
-        onAuthCancelled(detail)
+      val primaryDetail = primaryEx.errorMessage?.toString() ?: primaryEx.message
+      Log.w("Auth", "Primary GetSignInWithGoogleOption failed (${primaryEx::class.java.simpleName}): $primaryDetail", primaryEx)
+      if (primaryEx is GetCredentialCancellationException && isExplicitUserCancellation(primaryEx)) {
+        onAuthCancelled(primaryDetail)
         return@launch
       }
-      // Fallback to single-option GetGoogleIdOption (bypasses MIUI/Android consent activity cancellation)
+
+      // Clear stale Play Services credential session before trying GetGoogleIdOption fallback
+      try {
+        activeCredManager.clearCredentialState(ClearCredentialStateRequest())
+      } catch (_: Throwable) {}
+
+      // Fallback to single-option GetGoogleIdOption (bypasses [16] Account reauth failed & MIUI consent issues)
       try {
         val fallbackOption = GetGoogleIdOption.Builder()
           .setFilterByAuthorizedAccounts(false)
@@ -757,14 +772,19 @@ fun onGoogleSignInClicked(
         }
       } catch (cancelEx: GetCredentialCancellationException) {
         val detail = cancelEx.errorMessage?.toString() ?: cancelEx.message
-        Log.w("Auth", "Google Sign-In fallback cancelled: $detail", cancelEx)
-        onAuthCancelled(detail)
+        Log.w("Auth", "Google Sign-In fallback cancelled/failed: $detail", cancelEx)
+        if (isExplicitUserCancellation(cancelEx)) {
+          onAuthCancelled(detail)
+        } else {
+          val cleanMsg = detail?.takeIf { it.isNotBlank() } ?: primaryDetail ?: "Account reauth failed"
+          onAuthError("Google ගිණුම් සත්‍යාපන දෝෂය ($cleanMsg). ඔබට පහතින් දුරකථන අංකය හරහා සෘජුවම ලියාපදිංචි වී / පරීක්ෂා කර පිවිසිය හැක.")
+        }
       } catch (fallbackEx: GetCredentialException) {
         val rawDetail = fallbackEx.errorMessage?.toString() ?: fallbackEx.localizedMessage ?: "Sign in failed"
         val friendlyDetail = if (rawDetail.contains("No credentials", ignoreCase = true) ||
           fallbackEx::class.java.simpleName.contains("NoCredential")
         ) {
-          "මෙම දුරකථනයේ Google ගිණුමක් සම්බන්ධ කර නොමැත. Settings > Accounts වෙත ගොස් Google ගිණුමක් එක් කරන්න (නැතහොත් ඇඩ්මින් ටැබ් එකෙන් පිවිසෙන්න)."
+          "මෙම දුරකථනයේ Google ගිණුමක් සම්බන්ධ කර නොමැත. Settings > Accounts වෙත ගොස් Google ගිණුමක් එක් කරන්න (නැතහොත් දුරකථන අංකයෙන් ඉදිරියට යන්න)."
         } else {
           rawDetail
         }
@@ -979,6 +999,23 @@ fun StudentPortalApp() {
             AppSecurityManager.isAdminSession = true
             saveLoggedInUserPhone(context, adminAcc.usernameOrPhone)
           }
+        } else if (!currentEmail.isNullOrBlank() && loggedInUser == null) {
+          val (currDevId, currDevName) = getDeviceIdentifier(context)
+          val studentAcc = registeredUsers.find {
+            !isAuthorizedAdminUser(it.usernameOrPhone) &&
+              (it.usernameOrPhone.trim().equals(currentEmail.trim(), ignoreCase = true) ||
+                it.googleEmail?.trim()?.equals(currentEmail.trim(), ignoreCase = true) == true) &&
+              (it.boundDeviceId == null || it.boundDeviceId == currDevId)
+          }
+          if (studentAcc != null && studentAcc.isApproved && !studentAcc.isApprovalExpired()) {
+            val restored = studentAcc.copy(
+              boundDeviceId = studentAcc.boundDeviceId ?: currDevId,
+              boundDeviceName = studentAcc.boundDeviceName ?: currDevName
+            )
+            loggedInUser = restored
+            saveRegisteredDevicePhone(context, restored.usernameOrPhone)
+            saveLoggedInUserPhone(context, restored.usernameOrPhone)
+          }
         }
       },
       scope = coroutineScope
@@ -1012,7 +1049,8 @@ fun StudentPortalApp() {
           boundDate = cloudUser.boundDate,
           slipImageUri = cloudUser.slipImageUri ?: local.slipImageUri,
           requestDate = cloudUser.requestDate ?: local.requestDate,
-          requestTimestamp = cloudUser.requestTimestamp ?: local.requestTimestamp
+          requestTimestamp = cloudUser.requestTimestamp ?: local.requestTimestamp,
+          googleEmail = cloudUser.googleEmail ?: local.googleEmail
         )
         if (updated != local) {
           registeredUsers[existingIndex] = updated
@@ -1032,7 +1070,8 @@ fun StudentPortalApp() {
             },
             boundDeviceId = cloudUser.boundDeviceId,
             boundDeviceName = cloudUser.boundDeviceName,
-            boundDate = cloudUser.boundDate
+            boundDate = cloudUser.boundDate,
+            googleEmail = cloudUser.googleEmail ?: currentLogged.googleEmail
           )
           if (updatedLogged != currentLogged) {
             loggedInUser = updatedLogged
@@ -3743,6 +3782,17 @@ fun StudentPortalApp() {
             setAdminSessionActive(context, false)
             saveLoggedInUserPhone(context, null)
             showAdminDashboardMasterDialog = false
+            val cm = CredentialManager.create(context.findActivity() ?: context)
+            coroutineScope.launch {
+              kotlinx.coroutines.withContext(kotlinx.coroutines.NonCancellable) {
+                try {
+                  cm.clearCredentialState(ClearCredentialStateRequest())
+                } catch (_: Throwable) {}
+                try {
+                  com.google.firebase.Firebase.auth.signOut()
+                } catch (_: Throwable) {}
+              }
+            }
           },
           onPreviewReceipt = { uriStr ->
             previewReceiptImageUrl = uriStr
@@ -10468,7 +10518,8 @@ fun LoginAndApprovalDialog(
                 onClick = { regSlipPickerLauncher.launch("image/*") },
                 shape = RoundedCornerShape(10.dp),
                 border = BorderStroke(1.2.dp, Color(0xFF2563EB)),
-                modifier = Modifier.fillMaxWidth().height(42.dp)
+                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 10.dp),
+                modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)
               ) {
                 Icon(
                   imageVector = Icons.Default.UploadFile,
@@ -10481,7 +10532,8 @@ fun LoginAndApprovalDialog(
                   text = "📎 බැංකු රිසිට්පත එක් කරන්න (Attach Bank Slip)",
                   fontSize = 11.5.sp,
                   fontWeight = FontWeight.Bold,
-                  color = Color(0xFF1D4ED8)
+                  color = Color(0xFF1D4ED8),
+                  textAlign = TextAlign.Center
                 )
               }
             }
@@ -10525,9 +10577,8 @@ fun LoginAndApprovalDialog(
                     googleSignInErrorMsg = null
                     onGoogleSignInClicked(
                       context = context,
-                      credentialManager = CredentialManager.create(context),
+                      credentialManager = CredentialManager.create(context.findActivity() ?: context),
                       onAuthSuccess = {
-                        isGoogleSigningIn = false
                         val userEmail = try {
                           com.google.firebase.Firebase.auth.currentUser?.email
                         } catch (_: Throwable) {
@@ -10537,6 +10588,7 @@ fun LoginAndApprovalDialog(
                         googleSignInErrorMsg = null
 
                         if (!userEmail.isNullOrBlank() && isAuthorizedAdminUser(userEmail)) {
+                          isGoogleSigningIn = false
                           val adminAcc = registeredUsers.find {
                             it.usernameOrPhone.trim().equals(userEmail.trim(), ignoreCase = true)
                           } ?: registeredUsers.find { isAuthorizedAdminUser(it.usernameOrPhone) }
@@ -10545,24 +10597,75 @@ fun LoginAndApprovalDialog(
                           onLoginSuccess(adminAcc)
                           onAdminLoginSuccess()
                         } else {
-                          val existingStudent = registeredUsers.find {
-                            !isAuthorizedAdminUser(it.usernameOrPhone) && (
-                              (!userEmail.isNullOrBlank() && it.usernameOrPhone.trim().equals(userEmail.trim(), ignoreCase = true)) ||
-                              (it.boundDeviceId == currDevId && it.isApproved && !it.isApprovalExpired())
-                            )
-                          }
-                          if (existingStudent != null && existingStudent.isApproved && !existingStudent.isApprovalExpired()) {
-                            Toast.makeText(context, "🎉 සාදරයෙන් පිළිගනිමු ${existingStudent.fullName}! (Google මඟින් තහවුරු විය)", Toast.LENGTH_LONG).show()
-                            onLoginSuccess(existingStudent)
-                          } else {
-                            Toast.makeText(context, "✅ Google ගිණුම සාර්ථකව සම්බන්ධ විය!", Toast.LENGTH_SHORT).show()
+                          coroutineScope.launch {
+                            try {
+                              if (CloudAuthManager.hasProperInternet(context)) {
+                                CloudAuthManager.fetchAllUsersFromCloudStrict(context).onSuccess { cloudUsers ->
+                                  cloudUsers.forEach { cu ->
+                                    val norm = CloudAuthManager.normalizePhoneKey(cu.usernameOrPhone)
+                                    val idx = registeredUsers.indexOfFirst {
+                                      CloudAuthManager.normalizePhoneKey(it.usernameOrPhone) == norm
+                                    }
+                                    if (idx >= 0) registeredUsers[idx] = cu else registeredUsers.add(cu)
+                                  }
+                                }
+                              }
+                            } catch (_: Throwable) {}
+                            isGoogleSigningIn = false
+
+                            val cleanEmail = userEmail?.trim().orEmpty()
+                            val existingStudent = registeredUsers.find {
+                              !isAuthorizedAdminUser(it.usernameOrPhone) && (
+                                (cleanEmail.isNotBlank() && (
+                                  it.usernameOrPhone.trim().equals(cleanEmail, ignoreCase = true) ||
+                                  it.googleEmail?.trim()?.equals(cleanEmail, ignoreCase = true) == true
+                                )) ||
+                                (it.boundDeviceId == currDevId)
+                              )
+                            }
+                            if (existingStudent != null) {
+                              if (existingStudent.isApproved && !existingStudent.isApprovalExpired()) {
+                                if (existingStudent.boundDeviceId != null && existingStudent.boundDeviceId != currDevId) {
+                                  deviceLockedUserForAlert = existingStudent
+                                } else {
+                                  val activated = existingStudent.copy(
+                                    boundDeviceId = existingStudent.boundDeviceId ?: currDevId,
+                                    boundDeviceName = existingStudent.boundDeviceName ?: currDevName,
+                                    googleEmail = existingStudent.googleEmail ?: cleanEmail.ifBlank { null }
+                                  )
+                                  if (activated != existingStudent) {
+                                    val normKey = CloudAuthManager.normalizePhoneKey(activated.usernameOrPhone)
+                                    val idx = registeredUsers.indexOfFirst {
+                                      CloudAuthManager.normalizePhoneKey(it.usernameOrPhone) == normKey
+                                    }
+                                    if (idx >= 0) registeredUsers[idx] = activated else registeredUsers.add(0, activated)
+                                    coroutineScope.launch { CloudAuthManager.syncUserToCloud(context, activated) }
+                                  }
+                                  saveRegisteredDevicePhone(context, activated.usernameOrPhone)
+                                  onUsersUpdated()
+                                  Toast.makeText(context, "🎉 සාදරයෙන් පිළිගනිමු ${activated.fullName}! (Google මඟින් තහවුරු විය)", Toast.LENGTH_LONG).show()
+                                  onLoginSuccess(activated)
+                                }
+                              } else if (existingStudent.isApprovalExpired()) {
+                                regName = regName.ifBlank { existingStudent.fullName }
+                                regPhone = existingStudent.usernameOrPhone
+                                Toast.makeText(context, "⚠️ මාස 6 කාලය අවසන් වී ඇත. රු. 1,000 ගෙවා අලුත් කිරීමේ ඉල්ලීම යවන්න.", Toast.LENGTH_LONG).show()
+                              } else {
+                                saveLoggedInUserPhone(context, existingStudent.usernameOrPhone)
+                                saveRegisteredDevicePhone(context, existingStudent.usernameOrPhone)
+                                onUsersUpdated()
+                                Toast.makeText(context, "⏳ ඔබගේ ගිණුම දැනටමත් ඇඩ්මින් අනුමැතියට පොරොත්තුවෙන් පවතී.", Toast.LENGTH_LONG).show()
+                              }
+                            } else {
+                              Toast.makeText(context, "✅ Google ගිණුම සාර්ථකව සම්බන්ධ විය! දැන් පහත විස්තර සමඟ ඉල්ලීම යවන්න.", Toast.LENGTH_SHORT).show()
+                            }
                           }
                         }
                       },
                       onAuthError = { err ->
                         isGoogleSigningIn = false
                         googleSignInErrorMsg = err
-                        Toast.makeText(context, "⚠️ Google Sign-In අසාර්ථකයි: $err", Toast.LENGTH_LONG).show()
+                        Toast.makeText(context, "⚠️ Google Sign-In: $err", Toast.LENGTH_LONG).show()
                       },
                       scope = coroutineScope,
                       onAuthCancelled = { detail ->
@@ -10577,7 +10680,8 @@ fun LoginAndApprovalDialog(
                 enabled = !isGoogleSigningIn && !isSubmittingRequest,
                 shape = RoundedCornerShape(10.dp),
                 border = BorderStroke(1.2.dp, Color(0xFF2563EB)),
-                modifier = Modifier.fillMaxWidth().padding(bottom = 10.dp).height(44.dp).testTag("google_sign_in_button")
+                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 10.dp),
+                modifier = Modifier.fillMaxWidth().padding(bottom = 10.dp).heightIn(min = 48.dp).testTag("google_sign_in_button")
               ) {
                 Icon(Icons.Default.AccountBox, contentDescription = "Sign in with Google", tint = Color(0xFF1D4ED8), modifier = Modifier.size(18.dp))
                 Spacer(modifier = Modifier.width(8.dp))
@@ -10585,7 +10689,8 @@ fun LoginAndApprovalDialog(
                   text = if (isGoogleSigningIn) "Google සත්‍යාපනය වෙමින්..." else "Sign in with Google (ගිණුම තහවුරු කරන්න)",
                   fontSize = 11.5.sp,
                   fontWeight = FontWeight.Bold,
-                  color = Color(0xFF1D4ED8)
+                  color = Color(0xFF1D4ED8),
+                  textAlign = TextAlign.Center
                 )
               }
             }
@@ -10676,18 +10781,29 @@ fun LoginAndApprovalDialog(
                           val cloudFetchRes = CloudAuthManager.fetchUserFromCloudStrict(context, cleanPhone)
                           if (cloudFetchRes.isFailure) return@awaitProperInternetAndRun Result.failure(cloudFetchRes.exceptionOrNull()!!)
                           val cloudFetch = cloudFetchRes.getOrNull()
+                            ?: if (cleanPhone.contains("@")) {
+                              allCloudUsers.find {
+                                it.usernameOrPhone.trim().equals(cleanPhone, ignoreCase = true) ||
+                                it.googleEmail?.trim()?.equals(cleanPhone, ignoreCase = true) == true
+                              }
+                            } else null
                           val existing = cloudFetch
 
                           if (existing != null && existing.boundDeviceId != null && existing.boundDeviceId != currDevId) {
                             return@awaitProperInternetAndRun Result.success(Triple("BOUND_OTHER_PHONE", existing, false))
                           }
 
+                          val linkedGoogleEmail = signedInGoogleEmail?.takeIf { it.contains("@") }
+                            ?: try { com.google.firebase.Firebase.auth.currentUser?.email } catch (_: Throwable) { null }
+                            ?: existing?.googleEmail
+
                           if (existing != null && existing.isApproved && !existing.isApprovalExpired()) {
                             val activated = existing.copy(
                               boundDeviceId = existing.boundDeviceId ?: currDevId,
-                              boundDeviceName = existing.boundDeviceName ?: currDevName
+                              boundDeviceName = existing.boundDeviceName ?: currDevName,
+                              googleEmail = existing.googleEmail ?: linkedGoogleEmail
                             )
-                            if (existing.boundDeviceId == null) {
+                            if (existing.boundDeviceId == null || (existing.googleEmail == null && linkedGoogleEmail != null)) {
                               val syncRes = CloudAuthManager.syncUserToCloudVerified(context, activated)
                               if (syncRes.isFailure) return@awaitProperInternetAndRun Result.failure(syncRes.exceptionOrNull()!!)
                             }
@@ -10706,7 +10822,8 @@ fun LoginAndApprovalDialog(
                               boundDeviceId = existing.boundDeviceId ?: currDevId,
                               boundDeviceName = existing.boundDeviceName ?: currDevName,
                               requestDate = nowFmt,
-                              requestTimestamp = now
+                              requestTimestamp = now,
+                              googleEmail = existing.googleEmail ?: linkedGoogleEmail
                             )
                             val syncRes = CloudAuthManager.syncUserToCloudVerified(context, updatedPending)
                             if (syncRes.isFailure) return@awaitProperInternetAndRun Result.failure(syncRes.exceptionOrNull()!!)
@@ -10743,7 +10860,8 @@ fun LoginAndApprovalDialog(
                             boundDate = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Date(currentNow)),
                             approvalTimestamp = null,
                             requestDate = currentNowFormatted,
-                            requestTimestamp = currentNow
+                            requestTimestamp = currentNow,
+                            googleEmail = linkedGoogleEmail
                           )
                           val syncRes = CloudAuthManager.syncUserToCloudVerified(context, newAcc)
                           if (syncRes.isFailure) return@awaitProperInternetAndRun Result.failure(syncRes.exceptionOrNull()!!)
@@ -10868,13 +10986,13 @@ fun LoginAndApprovalDialog(
                   } catch (_: Throwable) {
                     false
                   }
-                  if (!hasSignedInUser) {
+                  if (!hasSignedInUser && googleSignInErrorMsg == null) {
                     val launchGoogleAuthFlow = {
                       isGoogleSigningIn = true
                       googleSignInErrorMsg = null
                       onGoogleSignInClicked(
                         context = context,
-                        credentialManager = CredentialManager.create(context),
+                        credentialManager = CredentialManager.create(context.findActivity() ?: context),
                         onAuthSuccess = {
                           isGoogleSigningIn = false
                           val userEmail = try {
@@ -10894,9 +11012,13 @@ fun LoginAndApprovalDialog(
                             onLoginSuccess(adminAcc)
                             onAdminLoginSuccess()
                           } else {
+                            val cleanEmail = userEmail?.trim().orEmpty()
                             val existingStudent = registeredUsers.find {
                               !isAuthorizedAdminUser(it.usernameOrPhone) && (
-                                (!userEmail.isNullOrBlank() && it.usernameOrPhone.trim().equals(userEmail.trim(), ignoreCase = true)) ||
+                                (cleanEmail.isNotBlank() && (
+                                  it.usernameOrPhone.trim().equals(cleanEmail, ignoreCase = true) ||
+                                  it.googleEmail?.trim()?.equals(cleanEmail, ignoreCase = true) == true
+                                )) ||
                                 (it.boundDeviceId == currDevId && it.isApproved && !it.isApprovalExpired())
                               )
                             }
@@ -10911,14 +11033,15 @@ fun LoginAndApprovalDialog(
                         onAuthError = { err ->
                           isGoogleSigningIn = false
                           googleSignInErrorMsg = err
-                          Toast.makeText(context, "⚠️ Google Sign-In අසාර්ථකයි: $err", Toast.LENGTH_LONG).show()
+                          // Do not trap user on Play Services reauth/config errors (e.g. [16] Account reauth failed) — proceed via Cloud Phone verification
+                          submitOrActivate()
                         },
                         scope = coroutineScope,
                         onAuthCancelled = { detail ->
                           isGoogleSigningIn = false
                           val detailNote = if (!detail.isNullOrBlank()) " ($detail)" else ""
                           googleSignInErrorMsg = "Google ගිණුම තෝරා අවසර ලබාදීම අවලංගු විය$detailNote"
-                          Toast.makeText(context, "⚠️ ලියාපදිංචිය සඳහා Google ගිණුම තෝරා අවසර ලබාදෙන්න$detailNote", Toast.LENGTH_LONG).show()
+                          Toast.makeText(context, "⚠️ Google ගිණුම තෝරා අවසර ලබාදෙන්න$detailNote (නැතහොත් නැවත ක්ලික් කර දුරකථන අංකයෙන් ඉදිරියට යන්න)", Toast.LENGTH_LONG).show()
                         }
                       )
                     }

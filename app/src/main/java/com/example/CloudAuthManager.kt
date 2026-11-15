@@ -372,6 +372,20 @@ object CloudAuthManager {
                         return Result.success(parseUserDocument(legacySnap))
                     }
                 }
+                if (usernameOrPhone.contains("@")) {
+                    val trimmedEmail = usernameOrPhone.trim()
+                    val emailQuerySnap = withTimeout(10_000L) {
+                        db.collection(COLLECTION_USERS)
+                            .whereEqualTo("googleEmail", trimmedEmail)
+                            .limit(1)
+                            .get(Source.SERVER)
+                            .await()
+                    }
+                    val firstDoc = emailQuerySnap.documents.firstOrNull()
+                    if (firstDoc != null && firstDoc.exists()) {
+                        return Result.success(parseUserDocument(firstDoc))
+                    }
+                }
                 Result.success(null)
             }
         } catch (ce: CancellationException) {
