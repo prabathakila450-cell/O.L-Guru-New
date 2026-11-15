@@ -10974,109 +10974,24 @@ fun LoginAndApprovalDialog(
                   }
                 }
 
-                // Wait for validated internet first, then perform Google Sign-In + Cloud Sync
+                // Strictly require Google Sign-In verification before submitting registration
                 val isFirebaseReady = try {
                   com.google.firebase.FirebaseApp.getApps(context).isNotEmpty()
                 } catch (_: Throwable) {
                   false
                 }
                 if (isFirebaseReady) {
-                  val hasSignedInUser = try {
-                    com.google.firebase.Firebase.auth.currentUser != null
+                  val currentUserEmail = try {
+                    com.google.firebase.Firebase.auth.currentUser?.email
                   } catch (_: Throwable) {
-                    false
+                    null
                   }
-                  if (!hasSignedInUser && googleSignInErrorMsg == null) {
-                    val launchGoogleAuthFlow = {
-                      isGoogleSigningIn = true
-                      googleSignInErrorMsg = null
-                      onGoogleSignInClicked(
-                        context = context,
-                        credentialManager = CredentialManager.create(context.findActivity() ?: context),
-                        onAuthSuccess = {
-                          isGoogleSigningIn = false
-                          val userEmail = try {
-                            com.google.firebase.Firebase.auth.currentUser?.email
-                          } catch (_: Throwable) {
-                            null
-                          }
-                          signedInGoogleEmail = userEmail ?: "Connected"
-                          googleSignInErrorMsg = null
-
-                          if (!userEmail.isNullOrBlank() && isAuthorizedAdminUser(userEmail)) {
-                            val adminAcc = registeredUsers.find {
-                              it.usernameOrPhone.trim().equals(userEmail.trim(), ignoreCase = true)
-                            } ?: registeredUsers.find { isAuthorizedAdminUser(it.usernameOrPhone) }
-                              ?: UserAccount("3", "අකිල ප්‍රභාත් දිසානායක (Admin)", userEmail, "A20020521PD", isApproved = true, paymentStatus = "Approved", requestedGradePackage = "06 සිට 11 දක්වා සියලුම ශ්‍රේණි (All Grades Mega Pack)", approvedGrades = listOf("06", "07", "08", "09", "10", "11", "6 ශ්‍රේණිය", "7 ශ්‍රේණිය", "8 ශ්‍රේණිය", "9 ශ්‍රේණිය", "10 ශ්‍රේණිය", "11 ශ්‍රේණිය"))
-                            Toast.makeText(context, "👑 සාදරයෙන් පිළිගනිමු, ඇඩ්මින්තුමනි! Google මඟින් තහවුරු විය.", Toast.LENGTH_LONG).show()
-                            onLoginSuccess(adminAcc)
-                            onAdminLoginSuccess()
-                          } else {
-                            val cleanEmail = userEmail?.trim().orEmpty()
-                            val existingStudent = registeredUsers.find {
-                              !isAuthorizedAdminUser(it.usernameOrPhone) && (
-                                (cleanEmail.isNotBlank() && (
-                                  it.usernameOrPhone.trim().equals(cleanEmail, ignoreCase = true) ||
-                                  it.googleEmail?.trim()?.equals(cleanEmail, ignoreCase = true) == true
-                                )) ||
-                                (it.boundDeviceId == currDevId && it.isApproved && !it.isApprovalExpired())
-                              )
-                            }
-                            if (existingStudent != null && existingStudent.isApproved && !existingStudent.isApprovalExpired()) {
-                              Toast.makeText(context, "🎉 සාදරයෙන් පිළිගනිමු ${existingStudent.fullName}! (Google මඟින් තහවුරු විය)", Toast.LENGTH_LONG).show()
-                              onLoginSuccess(existingStudent)
-                            } else {
-                              submitOrActivate()
-                            }
-                          }
-                        },
-                        onAuthError = { err ->
-                          isGoogleSigningIn = false
-                          googleSignInErrorMsg = err
-                          // Do not trap user on Play Services reauth/config errors (e.g. [16] Account reauth failed) — proceed via Cloud Phone verification
-                          submitOrActivate()
-                        },
-                        scope = coroutineScope,
-                        onAuthCancelled = { detail ->
-                          isGoogleSigningIn = false
-                          val detailNote = if (!detail.isNullOrBlank()) " ($detail)" else ""
-                          googleSignInErrorMsg = "Google ගිණුම තෝරා අවසර ලබාදීම අවලංගු විය$detailNote"
-                          Toast.makeText(context, "⚠️ Google ගිණුම තෝරා අවසර ලබාදෙන්න$detailNote (නැතහොත් නැවත ක්ලික් කර දුරකථන අංකයෙන් ඉදිරියට යන්න)", Toast.LENGTH_LONG).show()
-                        }
-                      )
-                    }
-
-                    if (!CloudAuthManager.hasProperInternet(context)) {
-                      regCloudWaitTitle = "📡 අන්තර්ජාල සබඳතාව අවශ්‍යයි"
-                      regCloudWaitOffline = true
-                      regCloudWaitMessage = "අන්තර්ජාල සබඳතාව අවශ්‍යයි! නියමිත මට්ටමේ අන්තර්ජාල සබඳතාවක් ලැබෙන තෙක් කැරකෙමින් රැඳී සිටී..."
-                      regCloudWaitVisible = true
-                      regActiveCloudJob = coroutineScope.launch {
-                        try {
-                          val netReady = CloudAuthManager.awaitProperInternetAndRun(
-                            context = context,
-                            onStatusUpdate = { waiting, msg ->
-                              regCloudWaitOffline = waiting
-                              regCloudWaitMessage = msg
-                            },
-                            block = { Result.success(Unit) }
-                          )
-                          regCloudWaitVisible = false
-                          if (netReady.isSuccess) {
-                            launchGoogleAuthFlow()
-                          }
-                        } catch (_: CancellationException) {
-                          regCloudWaitVisible = false
-                        } finally {
-                          regActiveCloudJob = null
-                        }
-                      }
-                    } else {
-                      launchGoogleAuthFlow()
-                    }
-                  } else {
-                    submitOrActivate()
+                  if (currentUserEmail.isNullOrBlank()) {
+                    Toast.makeText(context, "⚠️ කරුණාකර පළමුව ඉහත 'Sign in with Google' බොත්තම ඔබා ඔබගේ Google ගිණුම තහවුරු කරන්න.", Toast.LENGTH_LONG).show()
+                    googleSignInErrorMsg = "ලියාපදිංචිය සඳහා Google ගිණුම තහවුරු කිරීම අනිවාර්ය වේ. කරුණාකර ඉහත Sign in with Google බොත්තම ඔබන්න."
+                    return@Button
                   }
+                  submitOrActivate()
                 } else {
                   submitOrActivate()
                 }
