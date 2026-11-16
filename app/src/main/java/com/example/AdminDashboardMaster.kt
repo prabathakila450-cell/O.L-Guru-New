@@ -1183,6 +1183,7 @@ private fun AdminUserItemCard(
   val context = LocalContext.current
   val isAdminAccount = isAuthorizedAdminUser(user.usernameOrPhone)
   var showPassword by remember { mutableStateOf(false) }
+  var showApproveConfirmDialog by remember { mutableStateOf(false) }
   var showRevokeConfirmDialog by remember { mutableStateOf(false) }
   var showDeleteConfirmDialog by remember { mutableStateOf(false) }
 
@@ -1540,7 +1541,7 @@ private fun AdminUserItemCard(
         ) {
           if (!user.isApproved || user.isApprovalExpired()) {
             Button(
-              onClick = onApprove,
+              onClick = { showApproveConfirmDialog = true },
               colors = ButtonDefaults.buttonColors(containerColor = if (user.isApprovalExpired()) Color(0xFFDC2626) else Color(0xFF059669)),
               shape = RoundedCornerShape(8.dp),
               modifier = Modifier.height(30.dp),
@@ -1576,6 +1577,57 @@ private fun AdminUserItemCard(
         }
       }
     }
+  }
+
+  // Approve User Confirmation Dialog
+  if (showApproveConfirmDialog) {
+    AlertDialog(
+      onDismissRequest = { showApproveConfirmDialog = false },
+      icon = {
+        Icon(
+          imageVector = Icons.Default.CheckCircle,
+          contentDescription = "Approve",
+          tint = Color(0xFF059669),
+          modifier = Modifier.size(28.dp)
+        )
+      },
+      title = {
+        Text(
+          text = "✅ අනුමත කිරීමට ස්ථීරද?",
+          fontWeight = FontWeight.Bold,
+          fontSize = 15.sp,
+          color = Color(0xFF0F172A)
+        )
+      },
+      text = {
+        Text(
+          text = "${user.fullName} (${user.usernameOrPhone}) පරිශීලකයා අනුමත කිරීමට ඔබට ස්ථීරද?\n(Are you sure you want to approve this user?)",
+          fontSize = 13.sp,
+          color = Color(0xFF334155)
+        )
+      },
+      confirmButton = {
+        Button(
+          onClick = {
+            showApproveConfirmDialog = false
+            onApprove()
+          },
+          colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF059669)),
+          shape = RoundedCornerShape(8.dp)
+        ) {
+          Text("ඔව් (Yes)", fontWeight = FontWeight.Bold, fontSize = 12.sp)
+        }
+      },
+      dismissButton = {
+        OutlinedButton(
+          onClick = { showApproveConfirmDialog = false },
+          shape = RoundedCornerShape(8.dp)
+        ) {
+          Text("නැත (Cancel)", fontSize = 12.sp)
+        }
+      },
+      properties = DialogProperties(securePolicy = AppSecurityManager.getSecureFlagPolicy())
+    )
   }
 
   // Revoke Approval Confirmation Dialog
