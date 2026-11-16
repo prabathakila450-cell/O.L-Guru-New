@@ -235,7 +235,18 @@ object CloudAuthManager {
     private fun parseUserDocument(doc: com.google.firebase.firestore.DocumentSnapshot): UserAccount? {
         val parsed = doc.toObject(UserAccount::class.java) ?: return null
         val rawApproved = doc.getBoolean("isApproved") ?: doc.getBoolean("approved") ?: parsed.isApproved
-        return parsed.copy(isApproved = rawApproved)
+        val normPkg = if (parsed.requestedGradePackage.contains("06") || parsed.requestedGradePackage.contains("All") || parsed.requestedGradePackage.isBlank()) {
+            "10 සහ 11 ශ්‍රේණි (Grade 10 & 11 O/L)"
+        } else {
+            parsed.requestedGradePackage
+        }
+        val defaultOlGrades = listOf("10", "11", "10 ශ්‍රේණිය", "11 ශ්‍රේණිය")
+        val normGrades = if (rawApproved) defaultOlGrades else parsed.approvedGrades
+        return parsed.copy(
+            isApproved = rawApproved,
+            requestedGradePackage = normPkg,
+            approvedGrades = normGrades
+        )
     }
 
     suspend fun syncUserToCloud(context: Context, user: UserAccount): Result<Unit> {

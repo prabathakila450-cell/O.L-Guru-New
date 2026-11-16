@@ -322,7 +322,7 @@ fun userAccountFromJsonString(jsonStr: String): UserAccount? {
       registerDate = json.optString("registerDate", "2026-08-20"),
       slipImageUri = json.optString("slipImageUri").takeIf { it.isNotBlank() },
       paymentStatus = json.optString("paymentStatus", "Pending Approval"),
-      requestedGradePackage = json.optString("requestedGradePackage", "06 සිට 11 දක්වා සියලුම ශ්‍රේණි (All Grades Mega Pack)"),
+      requestedGradePackage = json.optString("requestedGradePackage", "10 සහ 11 ශ්‍රේණි (Grade 10 & 11 O/L)"),
       approvedGrades = gradesList,
       boundDeviceId = json.optString("boundDeviceId").takeIf { it.isNotBlank() },
       boundDeviceName = json.optString("boundDeviceName").takeIf { it.isNotBlank() },
@@ -407,13 +407,14 @@ fun launchAdminWhatsAppRequest(
   isRenewal: Boolean,
   hasSlip: Boolean
 ) {
+  val cleanPackage = "10 සහ 11 ශ්‍රේණි (Grade 10 & 11 O/L)"
   val requestType = if (isRenewal) "මාස 6 අලුත් කිරීමේ ඉල්ලීම (Rs. 1,000 Renewal)" else "නව ලියාපදිංචි අනුමැති ඉල්ලීම (New Registration)"
   val slipLabel = if (hasSlip) "ඇමුණා ඇත (Attached in App)" else "පසුව එවනු ලැබේ"
   val whatsappMsg = "ආයුබෝවන් ඇඩ්මින්!\n\n" +
     "මම O/L Guru ඇප් එක හරහා $requestType යොමු කළා. කරුණාකර ඇඩ්මින් ඩෑෂ්බෝඩ් එකෙන් (Admin Dashboard) මගේ ගිණුම අනුමත කරන්න.\n\n" +
     "👤 නම: $fullName\n" +
     "📞 අංකය: $phone\n" +
-    "📦 පැකේජය: $gradePackage\n" +
+    "📦 පැකේජය: $cleanPackage\n" +
     "📱 උපාංගය: $deviceName\n" +
     "🧾 රිසිට්පත: $slipLabel\n\n" +
     "ස්තූතියි!"
@@ -438,32 +439,13 @@ fun getDeviceIdentifier(context: Context): Pair<String, String> {
 }
 
 fun getApprovedGradesForPackage(pkg: String): List<String> {
-  return when {
-    pkg.contains("10 සහ 11") || pkg.contains("O/L") -> listOf("10", "11", "10 ශ්‍රේණිය", "11 ශ්‍රේණිය")
-    pkg.contains("06") || pkg.contains("6") -> listOf("06", "6", "6 ශ්‍රේණිය")
-    pkg.contains("07") || pkg.contains("7") -> listOf("07", "7", "7 ශ්‍රේණිය")
-    pkg.contains("08") || pkg.contains("8") -> listOf("08", "8", "8 ශ්‍රේණිය")
-    pkg.contains("09") || pkg.contains("9") -> listOf("09", "9", "9 ශ්‍රේණිය")
-    pkg.contains("සියලු") || pkg.contains("All") -> listOf("06", "07", "08", "09", "10", "11", "6 ශ්‍රේණිය", "7 ශ්‍රේණිය", "8 ශ්‍රේණිය", "9 ශ්‍රේණිය", "10 ශ්‍රේණිය", "11 ශ්‍රේණිය")
-    else -> listOf("10", "11", "10 ශ්‍රේණිය", "11 ශ්‍රේණිය")
-  }
+  return listOf("10", "11", "10 ශ්‍රේණිය", "11 ශ්‍රේණිය")
 }
 
 fun isUserApprovedForGrade(user: UserAccount?, grade: String, isAdmin: Boolean): Boolean {
   if (isAdmin) return true
   if (user == null || !user.isApproved || user.isApprovalExpired()) return false
-  if (user.requestedGradePackage.contains("සියලු") || user.requestedGradePackage.contains("All")) {
-    return true
-  }
-  if (user.approvedGrades.isEmpty()) return false
-  val cleanGrade = grade.replace("ශ්‍රේණිය", "").replace("Grade", "").replace("වසර", "").trim()
-  val paddedGrade = if (cleanGrade.length == 1) "0$cleanGrade" else cleanGrade
-  val singleDigit = if (cleanGrade.startsWith("0")) cleanGrade.substring(1) else cleanGrade
-
-  return user.approvedGrades.any { approved ->
-    val cleanApproved = approved.replace("ශ්‍රේණිය", "").replace("Grade", "").replace("වසර", "").trim()
-    cleanApproved == cleanGrade || cleanApproved == paddedGrade || cleanApproved == singleDigit || approved.contains(cleanGrade)
-  }
+  return true // Approval grants complete access to 10 & 11 (the entire O/L app)
 }
 
 fun isAuthorizedAdminUser(phoneOrEmail: String?): Boolean {
@@ -913,9 +895,9 @@ fun StudentPortalApp() {
     val saved = loadUsersFromPreferences(context)
     val list = mutableStateListOf<UserAccount>()
     val defaultAdminUsers = listOf(
-      UserAccount("1", "අකිල ප්‍රභාත් දිසානායක (Admin)", "0772843861", "A20020521PD", isApproved = true, paymentStatus = "Approved", requestedGradePackage = "06 සිට 11 දක්වා සියලුම ශ්‍රේණි (All Grades Mega Pack)", approvedGrades = listOf("06", "07", "08", "09", "10", "11", "6 ශ්‍රේණිය", "7 ශ්‍රේණිය", "8 ශ්‍රේණිය", "9 ශ්‍රේණිය", "10 ශ්‍රේණිය", "11 ශ්‍රේණිය")),
-      UserAccount("2", "අකිල ප්‍රභාත් දිසානායක (Admin)", "0717136085", "A20020521PD", isApproved = true, paymentStatus = "Approved", requestedGradePackage = "06 සිට 11 දක්වා සියලුම ශ්‍රේණි (All Grades Mega Pack)", approvedGrades = listOf("06", "07", "08", "09", "10", "11", "6 ශ්‍රේණිය", "7 ශ්‍රේණිය", "8 ශ්‍රේණිය", "9 ශ්‍රේණිය", "10 ශ්‍රේණිය", "11 ශ්‍රේණිය")),
-      UserAccount("3", "අකිල ප්‍රභාත් දිසානායක (Admin)", "prabathakila450@gmail.com", "A20020521PD", isApproved = true, paymentStatus = "Approved", requestedGradePackage = "06 සිට 11 දක්වා සියලුම ශ්‍රේණි (All Grades Mega Pack)", approvedGrades = listOf("06", "07", "08", "09", "10", "11", "6 ශ්‍රේණිය", "7 ශ්‍රේණිය", "8 ශ්‍රේණිය", "9 ශ්‍රේණිය", "10 ශ්‍රේණිය", "11 ශ්‍රේණිය"))
+      UserAccount("1", "අකිල ප්‍රභාත් දිසානායක (Admin)", "0772843861", "A20020521PD", isApproved = true, paymentStatus = "Approved", requestedGradePackage = "10 සහ 11 ශ්‍රේණි (Grade 10 & 11 O/L)", approvedGrades = listOf("10", "11", "10 ශ්‍රේණිය", "11 ශ්‍රේණිය")),
+      UserAccount("2", "අකිල ප්‍රභාත් දිසානායක (Admin)", "0717136085", "A20020521PD", isApproved = true, paymentStatus = "Approved", requestedGradePackage = "10 සහ 11 ශ්‍රේණි (Grade 10 & 11 O/L)", approvedGrades = listOf("10", "11", "10 ශ්‍රේණිය", "11 ශ්‍රේණිය")),
+      UserAccount("3", "අකිල ප්‍රභාත් දිසානායක (Admin)", "prabathakila450@gmail.com", "A20020521PD", isApproved = true, paymentStatus = "Approved", requestedGradePackage = "10 සහ 11 ශ්‍රේණි (Grade 10 & 11 O/L)", approvedGrades = listOf("10", "11", "10 ශ්‍රේණිය", "11 ශ්‍රේණිය"))
     )
 
     // Permanently filter out and prune any mock/fake demo accounts previously saved in local storage
@@ -942,8 +924,8 @@ fun StudentPortalApp() {
           fullName = admin.fullName,
           isApproved = true,
           paymentStatus = "Approved",
-          requestedGradePackage = "06 සිට 11 දක්වා සියලුම ශ්‍රේණි (All Grades Mega Pack)",
-          approvedGrades = listOf("06", "07", "08", "09", "10", "11", "6 ශ්‍රේණිය", "7 ශ්‍රේණිය", "8 ශ්‍රේණිය", "9 ශ්‍රේණිය", "10 ශ්‍රේණිය", "11 ශ්‍රේණිය")
+          requestedGradePackage = "10 සහ 11 ශ්‍රේණි (Grade 10 & 11 O/L)",
+          approvedGrades = listOf("10", "11", "10 ශ්‍රේණිය", "11 ශ්‍රේණිය")
         )
       } else {
         merged.add(admin)
@@ -1288,8 +1270,8 @@ fun StudentPortalApp() {
           password = "A20020521PD",
           isApproved = true,
           paymentStatus = "Approved",
-          requestedGradePackage = "06 සිට 11 දක්වා සියලුම ශ්‍රේණි (All Grades Mega Pack)",
-          approvedGrades = listOf("06", "07", "08", "09", "10", "11", "6 ශ්‍රේණිය", "7 ශ්‍රේණිය", "8 ශ්‍රේණිය", "9 ශ්‍රේණිය", "10 ශ්‍රේණිය", "11 ශ්‍රේණිය"),
+          requestedGradePackage = "10 සහ 11 ශ්‍රේණි (Grade 10 & 11 O/L)",
+          approvedGrades = listOf("10", "11", "10 ශ්‍රේණිය", "11 ශ්‍රේණිය"),
           boundDeviceId = currDevId,
           boundDeviceName = currDevName
         )

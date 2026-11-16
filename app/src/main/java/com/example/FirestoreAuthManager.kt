@@ -15,8 +15,9 @@ data class FirestoreUser(
     val password: String = "",
     val isApproved: Boolean = false,
     val paymentStatus: String = "Pending Approval",
-    val requestedGradePackage: String = "06 සිට 11 දක්වා සියලුම ශ්‍රේණි (All Grades)",
+    val requestedGradePackage: String = "10 සහ 11 ශ්‍රේණි (Grade 10 & 11 O/L)",
     val bankSlipUrl: String? = null,
+    val school: String = "",
     val requestTimestamp: Long = System.currentTimeMillis()
 ) : Serializable
 

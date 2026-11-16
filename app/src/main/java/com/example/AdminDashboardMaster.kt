@@ -904,10 +904,11 @@ private fun UserManagementSection(
         AdminUserItemCard(
           user = user,
           onApprove = {
-            val gradesToAssign = getApprovedGradesForPackage(user.requestedGradePackage)
+            val gradesToAssign = listOf("10", "11", "10 ශ්‍රේණිය", "11 ශ්‍රේණිය")
             val updatedUser = user.copy(
               isApproved = true,
               paymentStatus = "Approved",
+              requestedGradePackage = "10 සහ 11 ශ්‍රේණි (Grade 10 & 11 O/L)",
               approvedGrades = gradesToAssign,
               approvalTimestamp = System.currentTimeMillis()
             )
@@ -996,13 +997,14 @@ private fun UserManagementSection(
           },
           onGrantAllGrades = {
             val updatedUser = user.copy(
-              approvedGrades = listOf("06", "07", "08", "09", "10", "11", "6 ශ්‍රේණිය", "7 ශ්‍රේණිය", "8 ශ්‍රේණිය", "9 ශ්‍රේණිය", "10 ශ්‍රේණිය", "11 ශ්‍රේණිය"),
+              requestedGradePackage = "10 සහ 11 ශ්‍රේණි (Grade 10 & 11 O/L)",
+              approvedGrades = listOf("10", "11", "10 ශ්‍රේණිය", "11 ශ්‍රේණිය"),
               isApproved = true,
               paymentStatus = "Approved",
               approvalTimestamp = System.currentTimeMillis()
             )
             onRunVerifiedCloudTask(
-              "✅ සියලු ශ්‍රේණි අනුමැතිය Cloud වෙත යවමින්...",
+              "✅ 10 සහ 11 ශ්‍රේණි (O/L) අනුමැතිය Cloud වෙත යවමින්...",
               { CloudAuthManager.syncUserToCloudVerified(context, updatedUser) }
             ) {
               val normKey = CloudAuthManager.normalizePhoneKey(updatedUser.usernameOrPhone)
@@ -1011,7 +1013,7 @@ private fun UserManagementSection(
               }
               if (idx >= 0) registeredUsers[idx] = updatedUser else registeredUsers.add(0, updatedUser)
               onUsersUpdated()
-              Toast.makeText(context, "${user.fullName} හට සියලු ශ්‍රේණි (06-11) ප්‍රවේශය (මාස 6 / දින 180) 100% නිවැරදිව ලබාදුනි!", Toast.LENGTH_SHORT).show()
+              Toast.makeText(context, "${user.fullName} හට 10 සහ 11 ශ්‍රේණි (O/L) ප්‍රවේශය (මාස 6 / දින 180) 100% නිවැරදිව ලබාදුනි!", Toast.LENGTH_SHORT).show()
             }
           },
           onDelete = {
@@ -1036,7 +1038,7 @@ private fun UserManagementSection(
   if (showManualApproveDialog) {
     var manualName by remember { mutableStateOf("") }
     var manualPhone by remember { mutableStateOf("") }
-    var manualPackage by remember { mutableStateOf("06 සිට 11 දක්වා සියලුම ශ්‍රේණි (All Grades)") }
+    var manualPackage by remember { mutableStateOf("10 සහ 11 ශ්‍රේණි (Grade 10 & 11 O/L)") }
     var isSavingManual by remember { mutableStateOf(false) }
 
     AlertDialog(
@@ -1052,7 +1054,7 @@ private fun UserManagementSection(
       text = {
         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
           Text(
-            text = "WhatsApp හරහා ඉල්ලුම් කළ ශිෂ්‍යයාගේ නම සහ දුරකථන අංකය ඇතුළත් කර අනුමත කරන්න. ශිෂ්‍යයා ඇප් එක විවෘත කළ විට ස්වයංක්‍රීයව සක්‍රීය වේ.",
+            text = "WhatsApp හරහා ඉල්ලුම් කළ ශිෂ්‍යයාගේ නම සහ දුරකථන අංකය ඇතුළත් කර අනුමත කරන්න. ශිෂ්‍යයා ඇප් එක විවෘත කළ විට 10 සහ 11 ශ්‍රේණි (O/L) දෙකටම එකවර ප්‍රවේශය හිමි වේ.",
             fontSize = 11.sp,
             color = Color(0xFF475569)
           )
@@ -1071,20 +1073,20 @@ private fun UserManagementSection(
             singleLine = true,
             modifier = Modifier.fillMaxWidth()
           )
-          Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(6.dp)
+          Surface(
+            shape = RoundedCornerShape(8.dp),
+            color = Color(0xFFEFF6FF),
+            border = BorderStroke(1.dp, Color(0xFFBFDBFE)),
+            modifier = Modifier.fillMaxWidth()
           ) {
-            FilterChip(
-              selected = manualPackage.contains("All"),
-              onClick = { manualPackage = "06 සිට 11 දක්වා සියලුම ශ්‍රේණි (All Grades)" },
-              label = { Text("06-11 සියල්ල", fontSize = 10.sp) }
-            )
-            FilterChip(
-              selected = manualPackage.contains("10 සහ 11"),
-              onClick = { manualPackage = "10 සහ 11 ශ්‍රේණි (O/L Combo Pack)" },
-              label = { Text("10+11 O/L", fontSize = 10.sp) }
-            )
+            Row(
+              modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+              verticalAlignment = Alignment.CenterVertically
+            ) {
+              Icon(Icons.Default.Verified, contentDescription = null, tint = Color(0xFF1D4ED8), modifier = Modifier.size(16.dp))
+              Spacer(modifier = Modifier.width(6.dp))
+              Text("පැකේජය: 10 සහ 11 ශ්‍රේණි O/L සම්පූර්ණ ප්‍රවේශය", fontSize = 11.sp, color = Color(0xFF1E3A8A), fontWeight = FontWeight.Bold)
+            }
           }
         }
       },
@@ -1338,10 +1340,16 @@ private fun AdminUserItemCard(
           }
         }
 
+        val displayPkg = if (user.requestedGradePackage.contains("06") || user.requestedGradePackage.contains("සියලු") || user.requestedGradePackage.isBlank()) {
+          "10 සහ 11 ශ්‍රේණි (Grade 10 & 11 O/L)"
+        } else {
+          user.requestedGradePackage
+        }
         Text(
-          text = "📦 ${user.requestedGradePackage.take(24)}...",
-          fontSize = 10.sp,
-          color = Color(0xFF64748B),
+          text = "📦 $displayPkg",
+          fontSize = 11.sp,
+          fontWeight = FontWeight.Medium,
+          color = Color(0xFF1E3A8A),
           maxLines = 1
         )
       }
@@ -1473,10 +1481,10 @@ private fun AdminUserItemCard(
         }
       }
 
-      // Grade Permissions Interactive Matrix (06 - 11)
+      // Grade Permissions Matrix (10 & 11 O/L)
       Spacer(modifier = Modifier.height(8.dp))
       Text(
-        text = "අනුමත ශ්‍රේණි (Grade Access):",
+        text = "අනුමත ශ්‍රේණි (Grade Access - O/L සම්පූර්ණ ප්‍රවේශය):",
         fontSize = 10.sp,
         fontWeight = FontWeight.Bold,
         color = Color(0xFF334155)
@@ -1485,30 +1493,42 @@ private fun AdminUserItemCard(
 
       Row(
         modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.spacedBy(4.dp)
+        horizontalArrangement = Arrangement.spacedBy(8.dp)
       ) {
-        listOf("06", "07", "08", "09", "10", "11").forEach { gradeNum ->
-          val isGranted = user.approvedGrades.any { it.contains(gradeNum) }
+        listOf("10", "11").forEach { gradeNum ->
+          val isGranted = user.isApproved || user.approvedGrades.any { it.contains(gradeNum) }
           Surface(
             onClick = { onToggleGrade(gradeNum) },
-            shape = RoundedCornerShape(6.dp),
+            shape = RoundedCornerShape(8.dp),
             color = if (isGranted) Color(0xFF15803D) else Color(0xFFE2E8F0),
             border = BorderStroke(1.dp, if (isGranted) Color(0xFF16A34A) else Color(0xFFCBD5E1)),
             modifier = Modifier.weight(1f)
           ) {
-            Text(
-              text = "$gradeNum",
-              fontSize = 10.sp,
-              fontWeight = FontWeight.Bold,
-              textAlign = TextAlign.Center,
-              color = if (isGranted) Color.White else Color(0xFF475569),
-              modifier = Modifier.padding(vertical = 4.dp)
-            )
+            Row(
+              modifier = Modifier.padding(vertical = 6.dp),
+              horizontalArrangement = Arrangement.Center,
+              verticalAlignment = Alignment.CenterVertically
+            ) {
+              Icon(
+                imageVector = if (isGranted) Icons.Default.Check else Icons.Default.Lock,
+                contentDescription = null,
+                tint = if (isGranted) Color.White else Color(0xFF64748B),
+                modifier = Modifier.size(12.dp)
+              )
+              Spacer(modifier = Modifier.width(4.dp))
+              Text(
+                text = "$gradeNum ශ්‍රේණිය",
+                fontSize = 11.sp,
+                fontWeight = FontWeight.Bold,
+                textAlign = TextAlign.Center,
+                color = if (isGranted) Color.White else Color(0xFF475569)
+              )
+            }
           }
         }
       }
 
-      // Quick Combo Buttons
+      // Quick Combo Button
       Row(
         modifier = Modifier
           .fillMaxWidth()
@@ -1520,14 +1540,7 @@ private fun AdminUserItemCard(
           contentPadding = PaddingValues(horizontal = 6.dp, vertical = 0.dp),
           modifier = Modifier.height(24.dp)
         ) {
-          Text("⭐ 10+11 O/L", fontSize = 9.sp, fontWeight = FontWeight.Bold, color = Color(0xFF1D4ED8))
-        }
-        TextButton(
-          onClick = onGrantAllGrades,
-          contentPadding = PaddingValues(horizontal = 6.dp, vertical = 0.dp),
-          modifier = Modifier.height(24.dp)
-        ) {
-          Text("🌟 සියලු ශ්‍රේණි (06-11)", fontSize = 9.sp, fontWeight = FontWeight.Bold, color = Color(0xFF059669))
+          Text("⭐ 10+11 O/L සම්පූර්ණ ප්‍රවේශය (Full Access)", fontSize = 10.sp, fontWeight = FontWeight.Bold, color = Color(0xFF1D4ED8))
         }
       }
 
