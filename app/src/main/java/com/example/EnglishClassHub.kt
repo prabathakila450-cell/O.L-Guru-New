@@ -573,7 +573,7 @@ fun EnglishMasterClassScreen(
   var expandedSection by remember { mutableStateOf<Int?>(null) }
 
   val defaultEnglishDriveUrl = "https://drive.google.com/file/d/155eu00n0_0IdrKc0wiWDqcwkqLa08ndI/preview"
-  val defaultEnglishNoteTitle = "09-11 ශ්‍රේණි ඉංග්‍රීසි පූර්ණ කෙටි සටහන් (Google Drive PDF)"
+  val defaultEnglishNoteTitle = "10-11 ශ්‍රේණි ඉංග්‍රීසි පූර්ණ කෙටි සටහන් (Google Drive PDF)"
 
   var internalShowPdfModal by remember { mutableStateOf(false) }
   var internalPdfUrl by remember { mutableStateOf("") }
@@ -949,7 +949,7 @@ fun EnglishMasterClassScreen(
                     color = Color(0xFFF59E0B)
                   ) {
                     Text(
-                      text = "09-11",
+                      text = "10-11",
                       fontSize = 8.sp,
                       fontWeight = FontWeight.ExtraBold,
                       color = Color(0xFF78350F),
@@ -1560,15 +1560,15 @@ fun EnglishMasterClassScreen(
       }
 
       // =========================================================================
-      // 1. 📑 09-11 ඉංග්‍රීසි පූර්ණ කෙටි සටහන් (PDF HUB)
+      // 1. 📑 10-11 ඉංග්‍රීසි පූර්ණ කෙටි සටහන් (PDF HUB)
       // =========================================================================
       item {
         val isExp = expandedSection == 1
         EnglishSectionCard(
           sectionNumber = "1",
-          badgeText = "09 - 11 ALL SYLLABUS",
+          badgeText = "10 - 11 O/L SYLLABUS",
           badgeColor = Color(0xFFF59E0B),
-          title = "📑 1. ඉංග්‍රීසි සටහන් (09-11 ශ්‍රේණි පූර්ණ කෙටි සටහන් PDF)",
+          title = "📑 1. ඉංග්‍රීසි සටහන් (10-11 ශ්‍රේණි පූර්ණ කෙටි සටහන් PDF)",
           description = "Tenses, Grammar Formulas, Active/Passive Voice, Prepositions, Letter Formats, Graphs & Essay Frameworks සාරාංශගත කෙටි සටහන් පොත.",
           backgroundImageRes = R.drawable.img_papers_bg_1786107349533,
           isExpanded = isExp,

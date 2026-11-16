@@ -245,8 +245,8 @@ object SyllabusRepository {
       grade = "11",
       subject = "ඉංග්‍රීසි",
       unitNumber = "Grammar & Writing",
-      unitTitleSinhala = "06-11 ශ්‍රේණි ඉංග්‍රීසි ව්‍යාකරණ, Tenses හා Writing කෙටි සටහන්",
-      unitTitleEnglish = "Grades 06-11 English Grammar, Tenses, Prepositions & Essay Writing",
+      unitTitleSinhala = "10-11 ශ්‍රේණි ඉංග්‍රීසි ව්‍යාකරණ, Tenses හා Writing කෙටි සටහන්",
+      unitTitleEnglish = "Grades 10-11 O/L English Grammar, Tenses, Prepositions & Essay Writing",
       term = "සියලු වාර",
       summaryNotes = listOf(
         "Parts of Speech: Nouns, Pronouns, Verbs, Adjectives, Adverbs, Prepositions, Conjunctions, Interjections.",
@@ -293,7 +293,7 @@ object SyllabusRepository {
       attachedDrivePdfs = mutableListOf(
         AttachedGoogleDrivePdf(
           id = "eng_g06_11_pdf_1",
-          title = "06-11 ශ්‍රේණි ඉංග්‍රීසි පූර්ණ කෙටි සටහන් (Google Drive)",
+          title = "10-11 ශ්‍රේණි ඉංග්‍රීසි පූර්ණ කෙටි සටහන් (Google Drive)",
           driveUrl = "https://drive.google.com/file/d/155eu00n0_0IdrKc0wiWDqcwkqLa08ndI/preview",
           uploadDate = "2026-08-18",
           fileSize = "4.2 MB",
@@ -433,8 +433,8 @@ object SyllabusRepository {
       grade = "11",
       subject = "ඉතිහාසය",
       unitNumber = "සිතියම්",
-      unitTitleSinhala = "06-11 ශ්‍රේණි ඉතිහාසය ලංකා හා ලෝක සිතියම් ලකුණු කිරීම",
-      unitTitleEnglish = "Grades 06-11 History Sri Lanka & World Map Marking Guide",
+      unitTitleSinhala = "10-11 ශ්‍රේණි ඉතිහාසය ලංකා හා ලෝක සිතියම් ලකුණු කිරීම",
+      unitTitleEnglish = "Grades 10-11 O/L History Sri Lanka & World Map Marking Guide",
       term = "සියලු වාර",
       summaryNotes = listOf(
         "ශ්‍රී ලංකා සිතියම: ප්‍රධාන ඓතිහාසික රාජධානි (අනුරාධපුරය, පොළොන්නරුව, දඹදෙණිය, යාපහුව, කුරුණෑගල, ගම්පොළ, කෝට්ටේ, සීතාවක, මහනුවර).",
@@ -479,7 +479,7 @@ object SyllabusRepository {
       attachedDrivePdfs = mutableListOf(
         AttachedGoogleDrivePdf(
           id = "hist_maps_pdf_1",
-          title = "06/07/08/09/10/11 ශ්‍රේණි ඉතිහාසය සිතියම් (Google Drive)",
+          title = "10 සහ 11 ශ්‍රේණි ඉතිහාසය සිතියම් (Google Drive)",
           driveUrl = "https://drive.google.com/file/d/1BVguuBjT1_iQVO296Zn4Dek2AOahBFsp/preview",
           uploadDate = "2026-08-18",
           fileSize = "4.5 MB",
@@ -622,8 +622,8 @@ object SyllabusRepository {
       grade = "11",
       subject = "සිංහල",
       unitNumber = "ව්‍යාකරණ",
-      unitTitleSinhala = "06-11 ශ්‍රේණි සිංහල ව්‍යාකරණ පූර්ණ කෙටි සටහන්",
-      unitTitleEnglish = "Grades 06-11 Sinhala Grammar Comprehensive Notes",
+      unitTitleSinhala = "10-11 ශ්‍රේණි සිංහල ව්‍යාකරණ පූර්ණ කෙටි සටහන්",
+      unitTitleEnglish = "Grades 10-11 O/L Sinhala Grammar Comprehensive Notes",
       term = "සියලු වාර",
       summaryNotes = listOf(
         "සිංහල හෝඩිය: ස්වර, ව්‍යංජන, ශුද්ධ සිංහල හෝඩිය (අක්ෂර 32) සහ මිශ්‍ර සිංහල හෝඩිය (අක්ෂර 54 / 60).",
@@ -3275,7 +3275,7 @@ object SyllabusRepository {
       attachedDrivePdfs = mutableListOf(
         AttachedGoogleDrivePdf(
           id = "eng_g11_grammar_all",
-          title = "06-11 ශ්‍රේණි ඉංග්‍රීසි ව්‍යාකරණ කෙටි සටහන් (Google Drive)",
+          title = "10-11 ශ්‍රේණි ඉංග්‍රීසි ව්‍යාකරණ කෙටි සටහන් (Google Drive)",
           driveUrl = "https://drive.google.com/file/d/155eu00n0_0IdrKc0wiWDqcwkqLa08ndI/preview",
           uploadDate = "2026-08-20",
           fileSize = "3.2 MB",
@@ -3308,7 +3308,7 @@ object SyllabusRepository {
       attachedDrivePdfs = mutableListOf(
         AttachedGoogleDrivePdf(
           id = "eng_g10_grammar_all",
-          title = "06-11 ශ්‍රේණි ඉංග්‍රීසි ව්‍යාකරණ කෙටි සටහන් (Google Drive)",
+          title = "10-11 ශ්‍රේණි ඉංග්‍රීසි ව්‍යාකරණ කෙටි සටහන් (Google Drive)",
           driveUrl = "https://drive.google.com/file/d/155eu00n0_0IdrKc0wiWDqcwkqLa08ndI/preview",
           uploadDate = "2026-08-20",
           fileSize = "3.2 MB",

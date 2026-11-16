@@ -8,8 +8,11 @@ import androidx.lifecycle.lifecycleScope
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
+import android.graphics.BitmapFactory
+import android.util.Base64
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -52,7 +55,9 @@ import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Phone
 import androidx.compose.material.icons.filled.PhoneAndroid
+import androidx.compose.material.icons.filled.ReceiptLong
 import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.School
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Send
 import androidx.compose.material.icons.filled.Star
@@ -91,6 +96,8 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
@@ -102,6 +109,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
+import coil.compose.AsyncImage
 
 /**
  * Top-Right Dedicated Small Circular Admin Badge
@@ -164,6 +172,7 @@ fun AdminDashboardMasterDialog(
   onUsersUpdated: () -> Unit,
   onLogoutAdmin: () -> Unit,
   onPreviewReceipt: (String) -> Unit,
+  onPreviewUserReceipt: (UserAccount) -> Unit = { u -> onPreviewReceipt(u.slipImageUri ?: "") },
   onSendBroadcast: (title: String, message: String, priority: BroadcastPriority, targetGrade: String) -> Unit = { _, _, _, _ -> },
   onReleaseAllStaged: () -> Unit = {},
   onOpenStagingDialog: () -> Unit = {},
@@ -535,6 +544,7 @@ fun AdminDashboardMasterDialog(
                   onFilterStatusChange = { userFilterStatus = it },
                   onUsersUpdated = onUsersUpdated,
                   onPreviewReceipt = onPreviewReceipt,
+                  onPreviewUserReceipt = onPreviewUserReceipt,
                   cloudWaitVisible = cloudWaitVisible,
                   onRunVerifiedCloudTask = { title, taskBlock, onSuccess ->
                     runVerifiedAdminCloudTask(
@@ -641,6 +651,7 @@ private fun UserManagementSection(
   onFilterStatusChange: (String) -> Unit,
   onUsersUpdated: () -> Unit,
   onPreviewReceipt: (String) -> Unit,
+  onPreviewUserReceipt: (UserAccount) -> Unit,
   cloudWaitVisible: Boolean,
   onRunVerifiedCloudTask: (
     title: String,
@@ -662,6 +673,7 @@ private fun UserManagementSection(
       val matchesSearch = searchQuery.isBlank() ||
         user.fullName.contains(searchQuery, ignoreCase = true) ||
         user.usernameOrPhone.contains(searchQuery, ignoreCase = true) ||
+        user.school.contains(searchQuery, ignoreCase = true) ||
         user.requestedGradePackage.contains(searchQuery, ignoreCase = true)
 
       val matchesFilter = when (filterStatus) {
@@ -900,7 +912,7 @@ private fun UserManagementSection(
         }
       }
     } else {
-      items(filteredList, key = { it.id + it.usernameOrPhone }) { user ->
+      items(filteredList, key = { "${CloudAuthManager.normalizePhoneKey(it.usernameOrPhone)}_${it.id}" }) { user ->
         AdminUserItemCard(
           user = user,
           onApprove = {
@@ -1027,8 +1039,8 @@ private fun UserManagementSection(
               Toast.makeText(context, "${user.fullName} ගිණුම 100% නිවැරදිව මකා දමන ලදී.", Toast.LENGTH_SHORT).show()
             }
           },
-          onPreviewReceipt = { uri ->
-            onPreviewReceipt(uri)
+          onPreviewReceipt = { _ ->
+            onPreviewUserReceipt(user)
           }
         )
       }
@@ -1038,6 +1050,7 @@ private fun UserManagementSection(
   if (showManualApproveDialog) {
     var manualName by remember { mutableStateOf("") }
     var manualPhone by remember { mutableStateOf("") }
+    var manualSchool by remember { mutableStateOf("") }
     var manualPackage by remember { mutableStateOf("10 සහ 11 ශ්‍රේණි (Grade 10 & 11 O/L)") }
     var isSavingManual by remember { mutableStateOf(false) }
 
@@ -1068,8 +1081,16 @@ private fun UserManagementSection(
           OutlinedTextField(
             value = manualPhone,
             onValueChange = { manualPhone = it },
-            label = { Text("දුරකථන අංකය (Phone Number)") },
+            label = { Text("WhatsApp දුරකථන අංකය (Phone Number)") },
             placeholder = { Text("07XXXXXXXX") },
+            singleLine = true,
+            modifier = Modifier.fillMaxWidth()
+          )
+          OutlinedTextField(
+            value = manualSchool,
+            onValueChange = { manualSchool = it },
+            label = { Text("පාසල (School)") },
+            placeholder = { Text("පාසලේ නම") },
             singleLine = true,
             modifier = Modifier.fillMaxWidth()
           )
@@ -1107,6 +1128,7 @@ private fun UserManagementSection(
             val approvedAcc = if (existingIdx >= 0) {
               registeredUsers[existingIdx].copy(
                 fullName = manualName.trim().ifBlank { registeredUsers[existingIdx].fullName },
+                school = manualSchool.trim().ifBlank { registeredUsers[existingIdx].school },
                 isApproved = true,
                 paymentStatus = "Approved",
                 requestedGradePackage = manualPackage,
@@ -1127,7 +1149,8 @@ private fun UserManagementSection(
                 boundDeviceName = null,
                 approvalTimestamp = now,
                 requestDate = java.text.SimpleDateFormat("yyyy-MM-dd HH:mm", java.util.Locale.getDefault()).format(java.util.Date(now)),
-                requestTimestamp = now
+                requestTimestamp = now,
+                school = manualSchool.trim()
               )
             }
             showManualApproveDialog = false
@@ -1268,10 +1291,18 @@ private fun AdminUserItemCard(
             }
 
             Text(
-              text = "📞 ${user.usernameOrPhone}",
+              text = "📞 WhatsApp: ${user.usernameOrPhone}",
               fontSize = 11.sp,
               color = Color(0xFF475569)
             )
+            if (!isAdminAccount) {
+              Text(
+                text = "🏫 පාසල: ${user.school.ifBlank { "සඳහන් කර නැත" }}",
+                fontSize = 10.5.sp,
+                fontWeight = FontWeight.Medium,
+                color = if (user.school.isNotBlank()) Color(0xFF1E3A8A) else Color(0xFF94A3B8)
+              )
+            }
           }
         }
 
@@ -1464,20 +1495,128 @@ private fun AdminUserItemCard(
         }
       }
 
-      // Bank Slip Preview Button (if uploaded)
-      if (user.slipImageUri != null) {
+      // Clickable Compact Bank Slip Bar inside THIS student's details box (Student-isolated preview)
+      val studentSlipUri = user.slipImageUri?.takeIf { it.isNotBlank() }
+      if (studentSlipUri != null) {
         Spacer(modifier = Modifier.height(6.dp))
-        Button(
-          onClick = { onPreviewReceipt(user.slipImageUri!!) },
-          colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFEFF6FF), contentColor = Color(0xFF1D4ED8)),
-          border = BorderStroke(1.dp, Color(0xFF93C5FD)),
-          shape = RoundedCornerShape(8.dp),
-          modifier = Modifier.fillMaxWidth().height(30.dp),
-          contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp)
+        val slipThumbnailBitmap = remember(user.id, user.usernameOrPhone, studentSlipUri) {
+          if (studentSlipUri.startsWith("data:image")) {
+            try {
+              val b64 = studentSlipUri.substringAfter("base64,", "")
+              if (b64.isNotBlank()) {
+                val bytes = Base64.decode(b64, Base64.DEFAULT)
+                BitmapFactory.decodeByteArray(bytes, 0, bytes.size)?.asImageBitmap()
+              } else null
+            } catch (_: Throwable) {
+              null
+            }
+          } else null
+        }
+        Surface(
+          onClick = { onPreviewReceipt(studentSlipUri) },
+          shape = RoundedCornerShape(10.dp),
+          color = Color(0xFFEFF6FF),
+          border = BorderStroke(1.2.dp, Color(0xFF3B82F6)),
+          modifier = Modifier.fillMaxWidth()
         ) {
-          Icon(Icons.Default.Visibility, contentDescription = "View Receipt", modifier = Modifier.size(14.dp))
-          Spacer(modifier = Modifier.width(6.dp))
-          Text("🧾 බැංකු රිසිට්පත පරීක්ෂා කරන්න (View Slip)", fontSize = 10.sp, fontWeight = FontWeight.Bold)
+          Row(
+            modifier = Modifier
+              .fillMaxWidth()
+              .padding(horizontal = 8.dp, vertical = 6.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween
+          ) {
+            Row(
+              verticalAlignment = Alignment.CenterVertically,
+              modifier = Modifier.weight(1f)
+            ) {
+              Box(
+                modifier = Modifier
+                  .size(38.dp)
+                  .clip(RoundedCornerShape(6.dp))
+                  .background(Color(0xFFDBEAFE))
+                  .border(1.dp, Color(0xFF93C5FD), RoundedCornerShape(6.dp)),
+                contentAlignment = Alignment.Center
+              ) {
+                if (slipThumbnailBitmap != null) {
+                  Image(
+                    bitmap = slipThumbnailBitmap,
+                    contentDescription = "${user.fullName} Bank Slip",
+                    modifier = Modifier.fillMaxSize(),
+                    contentScale = ContentScale.Crop
+                  )
+                } else {
+                  AsyncImage(
+                    model = studentSlipUri,
+                    contentDescription = "${user.fullName} Bank Slip",
+                    modifier = Modifier.fillMaxSize(),
+                    contentScale = ContentScale.Crop
+                  )
+                }
+              }
+              Spacer(modifier = Modifier.width(8.dp))
+              Column(modifier = Modifier.weight(1f)) {
+                Text(
+                  text = "🧾 බැංකු රිසිට්පත (Bank Slip)",
+                  fontSize = 10.5.sp,
+                  fontWeight = FontWeight.Bold,
+                  color = Color(0xFF1E3A8A)
+                )
+                Text(
+                  text = "${user.fullName} • විශාල කර බලන්න",
+                  fontSize = 9.5.sp,
+                  color = Color(0xFF2563EB),
+                  maxLines = 1,
+                  overflow = TextOverflow.Ellipsis
+                )
+              }
+            }
+            Surface(
+              shape = RoundedCornerShape(6.dp),
+              color = Color(0xFF1D4ED8)
+            ) {
+              Row(
+                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                verticalAlignment = Alignment.CenterVertically
+              ) {
+                Icon(
+                  imageVector = Icons.Default.Visibility,
+                  contentDescription = "Open Slip",
+                  tint = Color.White,
+                  modifier = Modifier.size(12.dp)
+                )
+                Spacer(modifier = Modifier.width(4.dp))
+                Text(
+                  text = "බලන්න",
+                  fontSize = 9.5.sp,
+                  fontWeight = FontWeight.Bold,
+                  color = Color.White
+                )
+              }
+            }
+          }
+        }
+      } else if (!isAdminAccount) {
+        Spacer(modifier = Modifier.height(6.dp))
+        Surface(
+          shape = RoundedCornerShape(8.dp),
+          color = Color(0xFFFEF3C7),
+          border = BorderStroke(1.dp, Color(0xFFFCD34D)),
+          modifier = Modifier.fillMaxWidth()
+        ) {
+          Row(
+            modifier = Modifier.padding(horizontal = 8.dp, vertical = 5.dp),
+            verticalAlignment = Alignment.CenterVertically
+          ) {
+            Icon(Icons.Default.ReceiptLong, contentDescription = null, tint = Color(0xFFB45309), modifier = Modifier.size(14.dp))
+            Spacer(modifier = Modifier.width(6.dp))
+            Text(
+              text = "⚠️ බැංකු රිසිට්පත අමුණා නොමැත",
+              fontSize = 9.5.sp,
+              fontWeight = FontWeight.SemiBold,
+              color = Color(0xFF92400E)
+            )
+          }
         }
       }
 

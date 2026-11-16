@@ -284,14 +284,14 @@ object AppSecurityManager {
    * Detects if device clock is rolled back maliciously to bypass trial periods or lockouts.
    */
   fun isTimeTampered(context: Context): Boolean {
-    if (isAdminSession) return false
+    if (isAdminSession || isDeviceEmulator()) return false
 
     try {
       val prefs = context.getSharedPreferences(PREFS_SECURITY, Context.MODE_PRIVATE)
       val currentTime = System.currentTimeMillis()
       val maxSeenTime = prefs.getLong("pref_max_seen_time", 0L)
 
-      if (maxSeenTime > 0L && currentTime < (maxSeenTime - 60_000L)) {
+      if (maxSeenTime > 0L && currentTime < (maxSeenTime - 15 * 60_000L)) {
         return true
       }
 

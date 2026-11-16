@@ -82,7 +82,7 @@ fun CountdownAndPlannerScreen(
     mutableStateListOf(
       StudyTaskItem("task_1", "විද්‍යාව 11 ශ්‍රේණිය: ජීව විද්‍යාව කෙටි සටහන් කියවීම", "විද්‍යාව", 30, true),
       StudyTaskItem("task_2", "ගණිතය: ජ්‍යාමිතිය ප්‍රමේය 5ක් පුහුණු වීම", "ගණිතය", 45, false),
-      StudyTaskItem("task_3", "ඉතිහාසය: 06-11 සිතියම් 3ක් ලකුණු කිරීම", "ඉතිහාසය", 20, false),
+      StudyTaskItem("task_3", "ඉතිහාසය: 10-11 සිතියම් 3ක් ලකුණු කිරීම", "ඉතිහාසය", 20, false),
       StudyTaskItem("task_4", "ඉංග්‍රීසි: Daily Vocabulary කාඩ්පත් 10ක් කියවීම", "English", 15, false),
       StudyTaskItem("task_5", "බුද්ධ ධර්මය: ප්‍රශ්න පත්‍රයේ කෙටි ප්‍රශ්න 20ක් ලිවීම", "බුද්ධ ධර්මය", 25, false)
     )

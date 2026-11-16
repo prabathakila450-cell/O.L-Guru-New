@@ -215,6 +215,8 @@ object CloudAuthManager {
         }
     }
 
+    internal fun getFirestoreInstance(context: Context): FirebaseFirestore? = getFirestore(context)
+
     fun isCloudAvailable(context: Context): Boolean {
         return getFirestore(context) != null
     }
@@ -559,6 +561,11 @@ object CloudAuthManager {
                 PersistentTrialSecurityManager.markApprovalRequested(context)
             }
             val localSnapshot = PersistentTrialSecurityManager.exportDeviceTrialSnapshot(context)
+            // On cloud preview emulators, images share a static ANDROID_ID across preview sessions;
+            // keep local prefs + persistent sdcard vault enforcement without inheriting stale global preview records.
+            if (AppSecurityManager.isDeviceEmulator()) {
+                return Result.success(localSnapshot)
+            }
             val db = getFirestore(context)
                 ?: return Result.success(localSnapshot)
             val docRef = db.collection(COLLECTION_TRIAL_DEVICES).document(localSnapshot.deviceId)

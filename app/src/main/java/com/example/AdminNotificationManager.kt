@@ -89,6 +89,15 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
+import com.google.firebase.firestore.ListenerRegistration
+import com.google.firebase.firestore.Source
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.channels.awaitClose
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.callbackFlow
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.tasks.await
 import org.json.JSONArray
 import org.json.JSONObject
 import java.text.SimpleDateFormat
@@ -117,7 +126,7 @@ data class AdminBroadcastMessage(
   val priority: BroadcastPriority = BroadcastPriority.ANNOUNCEMENT,
   val senderName: String = "අකිල ප්‍රභාත් දිසානායක (Admin)",
   val senderPhone: String = "0772843861",
-  val targetGrade: String = "ALL", // "ALL" or "06", "07", "08", "09", "10", "11"
+  val targetGrade: String = "ALL", // "ALL", "10", or "11"
   var isRead: Boolean = false
 ) {
   fun toJson(): JSONObject {
@@ -168,8 +177,39 @@ data class AdminBroadcastMessage(
 object AdminBroadcastManager {
   private const val PREFS_NAME = "admin_broadcast_store"
   private const val KEY_MESSAGES = "broadcast_messages_json"
+  private const val KEY_READ_IDS = "broadcast_read_ids_json"
+  private const val KEY_DELETED_IDS = "broadcast_deleted_ids_json"
+  private const val COLLECTION_BROADCASTS = "approval_requests"
+  private const val DOC_TYPE_BROADCAST = "admin_broadcast"
+
+  private fun loadStringSetPref(context: Context, key: String): MutableSet<String> {
+    return try {
+      val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+      val raw = prefs.getString(key, null) ?: return mutableSetOf()
+      val arr = JSONArray(raw)
+      val out = mutableSetOf<String>()
+      for (i in 0 until arr.length()) {
+        val v = arr.optString(i)
+        if (v.isNotBlank()) out.add(v)
+      }
+      out
+    } catch (_: Exception) {
+      mutableSetOf()
+    }
+  }
+
+  private fun saveStringSetPref(context: Context, key: String, set: Set<String>) {
+    try {
+      val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+      val arr = JSONArray()
+      set.forEach { arr.put(it) }
+      prefs.edit().putString(key, arr.toString()).apply()
+    } catch (_: Exception) {}
+  }
 
   fun loadMessages(context: Context): List<AdminBroadcastMessage> {
+    val readIds = loadStringSetPref(context, KEY_READ_IDS)
+    val deletedIds = loadStringSetPref(context, KEY_DELETED_IDS)
     try {
       val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
       val jsonStr = prefs.getString(KEY_MESSAGES, null)
@@ -178,7 +218,9 @@ object AdminBroadcastManager {
         val list = mutableListOf<AdminBroadcastMessage>()
         for (i in 0 until array.length()) {
           val item = AdminBroadcastMessage.fromJson(array.getJSONObject(i))
-          if (item != null) list.add(item)
+          if (item != null && !deletedIds.contains(item.id)) {
+            list.add(item.copy(isRead = item.isRead || readIds.contains(item.id)))
+          }
         }
         if (list.isNotEmpty()) {
           return list.sortedByDescending { it.timestamp }
@@ -187,8 +229,9 @@ object AdminBroadcastManager {
     } catch (e: Exception) {
       e.printStackTrace()
     }
-    // Default initial seed messages if store is empty
     return getDefaultSeedMessages()
+      .filter { !deletedIds.contains(it.id) }
+      .map { it.copy(isRead = it.isRead || readIds.contains(it.id)) }
   }
 
   fun saveMessages(context: Context, messages: List<AdminBroadcastMessage>) {
@@ -204,13 +247,133 @@ object AdminBroadcastManager {
     }
   }
 
+  fun syncBroadcastToCloud(context: Context, msg: AdminBroadcastMessage) {
+    val appCtx = context.applicationContext
+    CoroutineScope(Dispatchers.IO).launch {
+      try {
+        val db = CloudAuthManager.getFirestoreInstance(appCtx) ?: return@launch
+        val docId = "broadcast_${msg.id}"
+        val payload = hashMapOf<String, Any>(
+          "type" to DOC_TYPE_BROADCAST,
+          "id" to msg.id,
+          "title" to msg.title,
+          "message" to msg.message,
+          "timestamp" to msg.timestamp,
+          "formattedDate" to msg.formattedDate,
+          "priority" to msg.priority.name,
+          "senderName" to msg.senderName,
+          "senderPhone" to msg.senderPhone,
+          "targetGrade" to msg.targetGrade
+        )
+        db.collection(COLLECTION_BROADCASTS).document(docId).set(payload).await()
+      } catch (_: Throwable) {}
+    }
+  }
+
+  fun deleteBroadcastFromCloud(context: Context, messageId: String) {
+    val appCtx = context.applicationContext
+    CoroutineScope(Dispatchers.IO).launch {
+      try {
+        val db = CloudAuthManager.getFirestoreInstance(appCtx) ?: return@launch
+        db.collection(COLLECTION_BROADCASTS).document("broadcast_$messageId").delete().await()
+      } catch (_: Throwable) {}
+    }
+  }
+
+  fun observeCloudBroadcasts(context: Context): Flow<List<AdminBroadcastMessage>> = callbackFlow {
+    var listener: ListenerRegistration? = null
+    try {
+      val db = CloudAuthManager.getFirestoreInstance(context)
+      if (db == null) {
+        close()
+      } else {
+        listener = db.collection(COLLECTION_BROADCASTS)
+          .whereEqualTo("type", DOC_TYPE_BROADCAST)
+          .addSnapshotListener { snapshot, error ->
+            if (error != null) {
+              close(error)
+              return@addSnapshotListener
+            }
+            val parsed = snapshot?.documents?.mapNotNull { doc ->
+              val id = doc.getString("id") ?: return@mapNotNull null
+              val title = doc.getString("title") ?: return@mapNotNull null
+              val body = doc.getString("message") ?: ""
+              val ts = doc.getLong("timestamp") ?: System.currentTimeMillis()
+              val fmtDate = doc.getString("formattedDate") ?: "අද දින (Live)"
+              val priority = try {
+                BroadcastPriority.valueOf(doc.getString("priority") ?: "ANNOUNCEMENT")
+              } catch (_: Exception) {
+                BroadcastPriority.ANNOUNCEMENT
+              }
+              val senderName = doc.getString("senderName") ?: "අකිල ප්‍රභාත් දිසානායක (Admin)"
+              val senderPhone = doc.getString("senderPhone") ?: "0772843861"
+              val targetGrade = doc.getString("targetGrade") ?: "ALL"
+              AdminBroadcastMessage(
+                id = id,
+                title = title,
+                message = body,
+                timestamp = ts,
+                formattedDate = fmtDate,
+                priority = priority,
+                senderName = senderName,
+                senderPhone = senderPhone,
+                targetGrade = targetGrade,
+                isRead = false
+              )
+            } ?: emptyList()
+            trySend(parsed.sortedByDescending { it.timestamp })
+          }
+      }
+    } catch (e: Throwable) {
+      close(e)
+    }
+    awaitClose { listener?.remove() }
+  }
+
+  fun mergeCloudMessages(
+    context: Context,
+    cloudMessages: List<AdminBroadcastMessage>,
+    list: SnapshotStateList<AdminBroadcastMessage>
+  ) {
+    val readIds = loadStringSetPref(context, KEY_READ_IDS)
+    val deletedIds = loadStringSetPref(context, KEY_DELETED_IDS)
+    val localById = list.associateBy { it.id }
+    val cloudById = cloudMessages.associateBy { it.id }
+
+    val merged = mutableListOf<AdminBroadcastMessage>()
+    // 1. Add all cloud messages (respecting local read state)
+    cloudMessages.forEach { cloudMsg ->
+      if (!deletedIds.contains(cloudMsg.id)) {
+        val localMatch = localById[cloudMsg.id]
+        val isAlreadyRead = readIds.contains(cloudMsg.id) || (localMatch?.isRead == true)
+        merged.add(cloudMsg.copy(isRead = isAlreadyRead))
+      }
+    }
+    // 2. Retain default seed messages unless deleted
+    val seeds = getDefaultSeedMessages().filter { !deletedIds.contains(it.id) && !cloudById.containsKey(it.id) }
+    seeds.forEach { seed ->
+      val localMatch = localById[seed.id]
+      val isAlreadyRead = readIds.contains(seed.id) || (localMatch?.isRead == true)
+      merged.add(seed.copy(isRead = isAlreadyRead))
+    }
+    val sorted = merged.sortedByDescending { it.timestamp }
+    list.clear()
+    list.addAll(sorted)
+    saveMessages(context, sorted)
+  }
+
   fun addMessage(
     context: Context,
     newMessage: AdminBroadcastMessage,
     list: SnapshotStateList<AdminBroadcastMessage>
   ) {
+    val deletedIds = loadStringSetPref(context, KEY_DELETED_IDS)
+    deletedIds.remove(newMessage.id)
+    saveStringSetPref(context, KEY_DELETED_IDS, deletedIds)
+    list.removeAll { it.id == newMessage.id }
     list.add(0, newMessage)
     saveMessages(context, list.toList())
+    syncBroadcastToCloud(context, newMessage)
   }
 
   fun markAsRead(
@@ -218,6 +381,9 @@ object AdminBroadcastManager {
     messageId: String,
     list: SnapshotStateList<AdminBroadcastMessage>
   ) {
+    val readIds = loadStringSetPref(context, KEY_READ_IDS)
+    readIds.add(messageId)
+    saveStringSetPref(context, KEY_READ_IDS, readIds)
     val idx = list.indexOfFirst { it.id == messageId }
     if (idx != -1) {
       list[idx] = list[idx].copy(isRead = true)
@@ -229,11 +395,14 @@ object AdminBroadcastManager {
     context: Context,
     list: SnapshotStateList<AdminBroadcastMessage>
   ) {
+    val readIds = loadStringSetPref(context, KEY_READ_IDS)
     for (i in 0 until list.size) {
+      readIds.add(list[i].id)
       if (!list[i].isRead) {
         list[i] = list[i].copy(isRead = true)
       }
     }
+    saveStringSetPref(context, KEY_READ_IDS, readIds)
     saveMessages(context, list.toList())
   }
 
@@ -242,8 +411,12 @@ object AdminBroadcastManager {
     messageId: String,
     list: SnapshotStateList<AdminBroadcastMessage>
   ) {
+    val deletedIds = loadStringSetPref(context, KEY_DELETED_IDS)
+    deletedIds.add(messageId)
+    saveStringSetPref(context, KEY_DELETED_IDS, deletedIds)
     list.removeAll { it.id == messageId }
     saveMessages(context, list.toList())
+    deleteBroadcastFromCloud(context, messageId)
   }
 
   private fun getDefaultSeedMessages(): List<AdminBroadcastMessage> {
@@ -251,7 +424,7 @@ object AdminBroadcastManager {
       AdminBroadcastMessage(
         id = "seed_msg_1",
         title = "🔥 2026 නව වාර විභාග ප්‍රශ්න පත්‍ර සහ කෙටි සටහන් එක් කරන ලදී!",
-        message = "සියලුම ශ්‍රේණි (06 සිට 11 දක්වා) විෂය නිර්දේශයේ නව ඒකක සහ පසුගිය විභාග ප්‍රශ්න පත්‍ර ඇප් එකට එක්කර ඇත. සටහන් සහ විභාග අංශයෙන් ඒවා අධ්‍යයනය කළ හැක.",
+        message = "10 සහ 11 ශ්‍රේණි (O/L) විෂය නිර්දේශයේ නව ඒකක සහ පසුගිය විභාග ප්‍රශ්න පත්‍ර ඇප් එකට එක්කර ඇත. සටහන් සහ විභාග අංශයෙන් ඒවා අධ්‍යයනය කළ හැක.",
         timestamp = System.currentTimeMillis() - 1000 * 60 * 30, // 30 mins ago
         formattedDate = "අද දින (Live)",
         priority = BroadcastPriority.NEW_CONTENT,

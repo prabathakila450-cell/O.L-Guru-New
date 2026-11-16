@@ -216,7 +216,7 @@ fun GradesHomeScreen(
           }
 
           Text(
-            text = "Grades 9-11 • ප්‍රශ්න 20 • Leaderboard",
+            text = "Grades 10-11 O/L • ප්‍රශ්න 20 • Leaderboard",
             fontSize = 9.sp,
             color = Color(0xFFC7D2FE),
             maxLines = 1,
@@ -757,7 +757,7 @@ fun EnglishHeroFeatureCard(
                 color = Color(0xFFF59E0B)
               ) {
                 Text(
-                  text = "09-11 ALL",
+                  text = "10-11 O/L",
                   fontSize = 7.sp,
                   fontWeight = FontWeight.Bold,
                   color = Color(0xFF78350F),
@@ -3257,7 +3257,7 @@ fun SubjectContentScreen(
                 Text("🔤", fontSize = 16.sp)
                 Spacer(modifier = Modifier.width(6.dp))
                 Text(
-                  text = "09/10/11 ඉංග්‍රීසි කෙටි සටහන් Auto-Checker",
+                  text = "10/11 ඉංග්‍රීසි කෙටි සටහන් Auto-Checker",
                   color = Color.White,
                   fontSize = 13.sp,
                   fontWeight = FontWeight.Bold,

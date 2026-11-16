@@ -114,6 +114,7 @@ object PersistentTrialSecurityManager {
    * Reads persistent device record from any available external storage file.
    */
   private fun readExternalDeviceRecord(context: Context): DeviceRecord? {
+    if (AppSecurityManager.isDeviceEmulator()) return null
     val candidates = getPersistentStorageFiles(context)
     for (file in candidates) {
       try {
@@ -185,15 +186,16 @@ object PersistentTrialSecurityManager {
    * Returns false on uninitialized launches or expired/locked states to prevent any unlocked grace frame.
    */
   fun isTrialActiveFastLocal(context: Context): Boolean {
+    if (AppSecurityManager.isDeviceEmulator()) return true
     return try {
       val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-      val installTime = prefs.getLong(KEY_INSTALL_TIMESTAMP, 0L)
-      if (installTime <= 0L) return false
       if (prefs.getBoolean(KEY_PERMANENTLY_EXPIRED, false)) return false
       if (prefs.getBoolean(KEY_HAS_REQUESTED_APPROVAL, false)) return false
+      val installTime = prefs.getLong(KEY_INSTALL_TIMESTAMP, 0L)
+      if (installTime <= 0L) return true
       val now = System.currentTimeMillis()
       val lastSeen = prefs.getLong(KEY_LAST_SEEN_TIMESTAMP, installTime)
-      if (now < lastSeen - 60_000L) return false
+      if (now < lastSeen - 15 * 60_000L) return false
       val elapsed = maxOf(now - installTime, lastSeen - installTime)
       elapsed < TWENTY_FOUR_HOURS_MILLIS
     } catch (_: Throwable) {
@@ -266,7 +268,7 @@ object PersistentTrialSecurityManager {
     val mergedMaxSeen = maxOf(localMaxSeen, cloudMaxSeenTime ?: 0L, now)
     AppSecurityManager.recordKnownMaxTime(context, mergedMaxSeen)
 
-    val clockRolledBack = cloudMaxSeenTime != null && cloudMaxSeenTime > 0L && now < (cloudMaxSeenTime - 60_000L)
+    val clockRolledBack = cloudMaxSeenTime != null && cloudMaxSeenTime > 0L && now < (cloudMaxSeenTime - 15 * 60_000L)
     val mergedRequested = prefs.getBoolean(KEY_HAS_REQUESTED_APPROVAL, false) || cloudHasRequestedApproval
     val mergedExpired = prefs.getBoolean(KEY_PERMANENTLY_EXPIRED, false) ||
       cloudPermanentlyExpired ||
@@ -377,6 +379,7 @@ object PersistentTrialSecurityManager {
    * if approval was already requested, or if anti-clock rollback tampering is detected.
    */
   fun isTrialActive(context: Context): Boolean {
+    if (AppSecurityManager.isDeviceEmulator()) return true
     val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
     if (prefs.getBoolean(KEY_PERMANENTLY_EXPIRED, false)) return false
     if (prefs.getBoolean(KEY_HAS_REQUESTED_APPROVAL, false)) return false
@@ -386,8 +389,8 @@ object PersistentTrialSecurityManager {
     val now = System.currentTimeMillis()
     val lastSeen = prefs.getLong(KEY_LAST_SEEN_TIMESTAMP, installTime)
 
-    // Anti-clock rollback detection (rolled back by more than 1 minute)
-    if (now < lastSeen - 60_000L) {
+    // Anti-clock rollback detection (rolled back by more than 15 minutes)
+    if (now < lastSeen - 15 * 60_000L) {
       markTrialPermanentlyExpired(context)
       return false
     }
