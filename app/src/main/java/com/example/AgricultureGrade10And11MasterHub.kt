@@ -1212,7 +1212,7 @@ private fun getSampleAgriLessons(): List<AgriLessonUnit> {
       category = AgriSectionCategory.LESSONS,
       summarySin = "ප්‍රශ්න පත්‍ර ව්‍යුහය, පොහොර ප්‍රතිශත මතක තබාගැනීමේ ක්‍රම සහ ප්‍රායෝගික සටහන්.",
       keyPoints = listOf(
-        "యූරියා 46% N, TSP 46% P2O5, MOP 60% K2O.",
+        "යූරියා 46% N, TSP 46% P2O5, MOP 60% K2O.",
         "pH මැනීම සහ කොම්පෝස්ට් පරීක්ෂණ.",
         "රචනා ප්‍රශ්න පිළිතුරු ලියන නිවැරදි ක්‍රමවේදය."
       ),

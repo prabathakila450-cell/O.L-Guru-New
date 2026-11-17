@@ -9,7 +9,7 @@ object SubjectMasterRepository {
     val lower = subjectName.lowercase()
     val rawList = when {
       subjectName.contains("භූගෝල") || lower.contains("geo") -> getGeographyCategories()
-      (subjectName.contains("විද්‍යාව") || lower.contains("science")) && !subjectName.contains("භූගෝල") -> SubjectMasterScience20x20.getCategories()
+      (subjectName.contains("විද්‍යාව") || lower.contains("science")) && !subjectName.contains("භූගෝල") && !subjectName.contains("කෘෂි") -> SubjectMasterScience20x20.getCategories()
       subjectName.contains("ව්‍යාපාර") || subjectName.contains("ගිණුම්") || subjectName.contains("වාණිජ") || lower.contains("commerce") -> SubjectMasterCommerce20x20.getCategories()
       subjectName.contains("ඉතිහාස") || lower.contains("history") -> SubjectMasterHistory20x20.getCategories()
       subjectName.contains("ඉංග්‍රීසි") || lower.contains("english") -> SubjectMasterEnglish20x20.getCategories()

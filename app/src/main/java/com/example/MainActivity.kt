@@ -509,6 +509,26 @@ fun isAdminSessionActive(context: Context): Boolean {
   return prefs.getBoolean("is_admin_session_active", false)
 }
 
+fun setAdminDeviceBound(context: Context, bound: Boolean) {
+  val prefs = context.getSharedPreferences("app_user_auth_store", Context.MODE_PRIVATE)
+  prefs.edit().putBoolean("is_admin_device_bound", bound).apply()
+}
+
+fun isAdminDeviceBound(context: Context): Boolean {
+  val prefs = context.getSharedPreferences("app_user_auth_store", Context.MODE_PRIVATE)
+  return prefs.getBoolean("is_admin_device_bound", false)
+}
+
+fun saveBoundAdminDeviceId(context: Context, deviceId: String) {
+  val prefs = context.getSharedPreferences("app_user_auth_store", Context.MODE_PRIVATE)
+  prefs.edit().putString("bound_admin_device_id", deviceId).apply()
+}
+
+fun getBoundAdminDeviceId(context: Context): String? {
+  val prefs = context.getSharedPreferences("app_user_auth_store", Context.MODE_PRIVATE)
+  return prefs.getString("bound_admin_device_id", null)
+}
+
 fun saveGitHubShareUrl(context: Context, url: String) {
   val prefs = context.getSharedPreferences("app_user_auth_store", Context.MODE_PRIVATE)
   prefs.edit().putString("github_apk_share_url", url).apply()
@@ -1276,15 +1296,21 @@ fun StudentPortalApp() {
       matchingUser.isApprovalExpired() &&
       !isAuthorizedAdminUser(matchingUser.usernameOrPhone)
 
-    // Admin authentication verification: ONLY restore if explicitly saved as authorized admin with active session
-    val isExplicitSavedAdmin = !savedPhone.isNullOrBlank() && isAuthorizedAdminUser(savedPhone) && isAdminSessionActive(context)
+    // Admin authentication verification: Check if device is bound admin or explicitly saved with active session
+    val isDeviceBoundAdmin = isAdminDeviceBound(context) && getBoundAdminDeviceId(context) == currDevId
+    val isExplicitSavedAdmin = (!savedPhone.isNullOrBlank() && isAuthorizedAdminUser(savedPhone) && isAdminSessionActive(context)) || isDeviceBoundAdmin
     if (!isExpiredStudentDetected && matchingUser == null && isExplicitSavedAdmin) {
       setAdminSessionActive(context, true)
+      setAdminDeviceBound(context, true)
+      val adminPhone = savedPhone?.takeIf { isAuthorizedAdminUser(it) } 
+        ?: registeredUsers.find { isAuthorizedAdminUser(it.usernameOrPhone) }?.usernameOrPhone 
+        ?: "0772843861"
+      saveLoggedInUserPhone(context, adminPhone)
       matchingUser = registeredUsers.find { isAuthorizedAdminUser(it.usernameOrPhone) }
         ?: UserAccount(
           id = "3",
           fullName = "අකිල ප්‍රභාත් දිසානායක (Admin)",
-          usernameOrPhone = savedPhone!!,
+          usernameOrPhone = adminPhone,
           password = "A20020521PD",
           isApproved = true,
           paymentStatus = "Approved",
@@ -11364,12 +11390,17 @@ fun LoginAndApprovalDialog(
                   ).show()
                 } else {
                   AppSecurityManager.resetFailedLogins(lockKey)
-                  val adminUser = registeredUsers.find { isAuthorizedAdminUser(it.usernameOrPhone) }
+                  val (currDevId, currDevName) = getDeviceIdentifier(context)
+                  val baseAdmin = registeredUsers.find { isAuthorizedAdminUser(it.usernameOrPhone) }
                     ?: UserAccount("1", "අකිල ප්‍රභාත් දිසානායක (Admin)", cleanAdminInput, cleanPass, isApproved = true, paymentStatus = "Approved", requestedGradePackage = "10 සහ 11 ශ්‍රේණි (Grade 10 & 11 O/L)", approvedGrades = listOf("10", "11", "10 ශ්‍රේණිය", "11 ශ්‍රේණිය"))
+                  val adminUser = baseAdmin.copy(boundDeviceId = currDevId, boundDeviceName = currDevName)
                   setAdminSessionActive(context, true)
+                  setAdminDeviceBound(context, true)
+                  saveBoundAdminDeviceId(context, currDevId)
+                  saveLoggedInUserPhone(context, adminUser.usernameOrPhone)
                   onAdminLoginSuccess()
                   onLoginSuccess(adminUser)
-                  Toast.makeText(context, "👑 ඇඩ්මින් ලොගින් සාර්ථකයි! Home තිරයේ Step 2 මඟින් ඇඩ්මින් ඩෑෂ්බෝඩ් එක විවෘත කරන්න.", Toast.LENGTH_LONG).show()
+                  Toast.makeText(context, "👑 ඇඩ්මින් ලොගින් සාර්ථකයි! මෙම දුරකථනය ඇඩ්මින් උපකරණයක් ලෙස ලියාපදිංචි විය.", Toast.LENGTH_LONG).show()
                 }
               },
               colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF1E3A8A)),

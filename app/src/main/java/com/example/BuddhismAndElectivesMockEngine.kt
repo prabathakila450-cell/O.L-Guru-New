@@ -11,49 +11,15 @@ object BuddhismAndElectivesMockEngine {
   }
 
   fun generateIctQuestion(grade: String, term: Int, paperIdx: Int, qNum: Int): MockExamQuestion {
-    val v = (paperIdx - 1) % 30
-    val topic = "තොරතුරු හා සන්නිවේදන තාක්ෂණය (ICT)"
-    val (text, opts, correct, exp) = when (qNum % 5) {
-      1 -> {
-        val val1 = 8 + (v % 8)
-        val bin = Integer.toBinaryString(val1)
-        Quad(
-          "දශම (Decimal) අංක $val1 හි ද්විමය (Binary) අගය නිවැරදිව දක්වා ඇත්තේ කුමක්ද?",
-          listOf("($bin)₂", "(${val1 + 1})₂", "(1100)₂", "(1010)₂"),
-          1,
-          "$val1 අගය 2න් බෙදා ශේෂයන් ගණනය කළ විට ($bin)₂ ලැබේ."
-        )
-      }
-      2 -> Quad(
-        "පරිගණකයක වේගය මැනීම සඳහා බහුලව භාවිත කරන ඒකකය කුමක්ද?",
-        listOf("Hertz (Hz / GHz)", "Bytes (GB)", "Pixels", "Dots per inch"),
-        1,
-        "CPU හි ඔරලෝසු වේගය GHz (Gigahertz) මගින් මනිනු ලැබේ."
-      )
-      3 -> Quad(
-        "MS Excel මෘදුකාංගයේ සෛල පරාසයක් (Cell Range) එකතු කිරීම සඳහා යොදාගන්නා නිවැරදි ශ්‍රිතය (Function) කුමක්ද?",
-        listOf("=SUM(A1:A10)", "=ADD(A1:A10)", "=TOTAL(A1:A10)", "=COUNT(A1:A10)"),
-        1,
-        "Excel හි අගයන් එකතු කිරීම සඳහා =SUM() ශ්‍රිතය භාවිතා වේ."
-      )
-      4 -> Quad(
-        "පරිගණක ජාලකරණයේදී 'IP Address' එකක් යන්නෙන් අදහස් වන්නේ කුමක්ද?",
-        listOf("ජාලයේ ඇති උපාංගයක් හඳුනාගැනීමට දෙන අනන්‍ය ලිපිනය", "පරිශීලකයාගේ නම", "පරිගණකයේ භෞතික පිහිටීම", "මෘදුකාංගයක සංස්කරණ අංකය"),
-        1,
-        "Internet Protocol (IP) ලිපිනයක් මගින් ජාලයක ඇති සෑම උපාංගයක්ම අද්විතීයව හඳුනා ගනී."
-      )
-      else -> Quad(
-        "HTML භාෂාවේ වෙබ් පිටුවක පසුබිම් වර්ණය (Background Color) වෙනස් කිරීමට යොදන ටැගය කුමක්ද?",
-        listOf("<body bgcolor='color'>", "<color bg='...'>", "<font color='...'>", "<background color='...'>"),
-        1,
-        "HTML හී body ටැගයේ bgcolor ගුණය භාවිතයෙන් පසුබිම් වර්ණය වෙනස් කළ හැක."
-      )
-    }
-    return MockExamQuestion(id = qNum, questionText = "[$qNum] $text", options = opts, correctOption = correct, explanation = exp, topicName = topic)
+    val cleanGrade = if (grade.contains("11")) "11" else "10"
+    val cleanTerm = if (term in 1..3) term else 1
+    val cleanPaper = if (paperIdx in 1..30) paperIdx else 1
+    val cleanQ = if (qNum in 1..60) qNum else 1
+    return IctMockQuestionBank.getQuestion(cleanGrade, cleanTerm, cleanPaper, cleanQ)
   }
 
   fun generateCommerceQuestion(grade: String, term: Int, paperIdx: Int, qNum: Int): MockExamQuestion {
-    return if (grade == "11") {
+    return if (grade.contains("11")) {
       CommerceGrade11QuestionBank.getQuestion(term, paperIdx, qNum)
     } else {
       CommerceGrade10QuestionBank.getQuestion(term, paperIdx, qNum)
@@ -65,7 +31,7 @@ object BuddhismAndElectivesMockEngine {
   }
 
   fun generateGeographyQuestion(grade: String, term: Int, paperIdx: Int, qNum: Int): MockExamQuestion {
-    return if (grade == "11") {
+    return if (grade.contains("11")) {
       GeographyGrade11QuestionBank.getQuestion(term, paperIdx, qNum)
     } else {
       GeographyGrade10QuestionBank.getQuestion(term, paperIdx, qNum)
@@ -73,7 +39,7 @@ object BuddhismAndElectivesMockEngine {
   }
 
   fun generateHealthQuestion(grade: String, term: Int, paperIdx: Int, qNum: Int): MockExamQuestion {
-    return if (grade == "11") {
+    return if (grade.contains("11")) {
       HealthGrade11QuestionBank.getQuestion(term, paperIdx, qNum)
     } else {
       HealthGrade10QuestionBank.getQuestion(term, paperIdx, qNum)
@@ -81,7 +47,7 @@ object BuddhismAndElectivesMockEngine {
   }
 
   fun generateAgriQuestion(grade: String, term: Int, paperIdx: Int, qNum: Int): MockExamQuestion {
-    return if (grade == "11") {
+    return if (grade.contains("11")) {
       AgriGrade11QuestionBank.getQuestion(term, paperIdx, qNum)
     } else {
       AgriGrade10QuestionBank.getQuestion(term, paperIdx, qNum)
@@ -89,42 +55,27 @@ object BuddhismAndElectivesMockEngine {
   }
 
   fun generateArtQuestion(grade: String, term: Int, paperIdx: Int, qNum: Int): MockExamQuestion {
-    val v = (paperIdx - 1) % 30
-    val topic = "චිත්‍ර කලාව (Art)"
-    val (text, opts, correct, exp) = when (qNum % 5) {
-      1 -> Quad("ප්‍රාථමික වර්ණ තුනට (Primary Colors) අයත් නොවන වර්ණය කුමක්ද?", listOf("කොළ", "රතු", "කහ", "නිල්"), 1, "රතු, කහ සහ නිල් ප්‍රාථමික වර්ණ වන අතර ඒවා මිශ්‍ර කර කොළ පැහැය සාදයි.")
-      2 -> Quad("ලෝක ප්‍රකට 'මොනාලිසා' (Mona Lisa) සිතුවම නිර්මාණය කළ ශිල්පියා කවුද?", listOf("ලියනාඩෝ ඩා වින්චි", "මයිකල් ඇන්ජලෝ", "පැබ්ලෝ පිකාසෝ", "වින්සන්ට් වෑන් ගෝ"), 1, "ලියනාඩෝ ඩා වින්චි විසින් ඉතාලි පුනරුද යුගයේදී මෙය නිර්මාණය කළේය.")
-      3 -> Quad("සීගිරි බිතුසිතුවම් නිර්මාණය කර ඇත්තේ කුමන යුගයට අයත් ශෛලියකටද?", listOf("අනුරාධපුර යුගය", "පොළොන්නරු යුගය", "මහනුවර යුගය", "කෝට්ටේ යුගය"), 1, "කාශ්‍යප රජුගේ කාලයේ (අනුරාධපුර යුගය) සීගිරි සිතුවම් නිර්මාණය විය.")
-      4 -> Quad("චිත්‍රයක 'සමබරතාව' (Balance) යන්නෙන් අදහස් කරන්නේ කුමක්ද?", listOf("සිතුවම තුළ දෘශ්‍ය බර නිවැරදිව බෙදී තිබීම", "වර්ණ රාශියක් තිබීම", "පින්සල් පහරවල් ගණන", "කඩදාසියේ ප්‍රමාණය"), 1, "සමබරතාව යනු සිතුවමේ ඇති කොටස් අතර ඇති දෘශ්‍යමය සාම්‍යයයි.")
-      else -> Quad("පොළොන්නරු යුගයේ තිවංක පිළිමගෙයි දැකිය හැකි සුවිශේෂී සිතුවම් මොනවාද?", listOf("ජාතක කතා සිතුවම්", "සීගිරි ලලනාවන්", "නූතන කලා සිතුවම්", "තෙල් සායම් සිතුවම්"), 1, "තිවංක පිළිමගෙය එහි ඇති සම්භාව්‍ය බිතුසිතුවම් සඳහා ප්‍රසිද්ධය.")
-    }
-    return MockExamQuestion(id = qNum, questionText = "[$qNum] $text", options = opts, correctOption = correct, explanation = exp, topicName = topic)
+    val cleanGrade = if (grade.contains("11")) "11" else "10"
+    val cleanTerm = if (term in 1..3) term else 1
+    val cleanPaper = if (paperIdx in 1..30) paperIdx else 1
+    val cleanQ = if (qNum in 1..60) qNum else 1
+    return ArtMockQuestionBank.getQuestion(cleanGrade, cleanTerm, cleanPaper, cleanQ)
   }
 
   fun generateMusicQuestion(grade: String, term: Int, paperIdx: Int, qNum: Int): MockExamQuestion {
-    val v = (paperIdx - 1) % 30
-    val topic = "සංගීතය (Music)"
-    val (text, opts, correct, exp) = when (qNum % 5) {
-      1 -> Quad("භාරතීය රාගධාරී සංගීතයේ එන මූලික ස්වර (Swaras) ගණන කීයද?", listOf("7", "5", "12", "3"), 1, "ස, රි, ග, ම, ප, ධ, නි යනුවෙන් මූලික ස්වර 7ක් ඇත.")
-      2 -> Quad("ශ්‍රී ලාංකීය ගැමි සංගීතයට අයත් වන ජන ගී විශේෂයක් නොවන්නේ කුමක්ද?", listOf("රාගධාරී ගීත", "පාරු කවි", "නෙළුම් කවි", "ගොයම් කවි"), 1, "පාරු, නෙළුම් හා ගොයම් කවි ජන සංගීතයට අයත් වන අතර රාගධාරී සංගීතය ඉන්දියානු පදනමක් සහිතයි.")
-      3 -> Quad("සංගීත භාණ්ඩයක් වන 'සිතාරය' අයත් වන්නේ කුමන වර්ගීකරණයටද?", listOf("තත වාද්‍ය (String)", "සුසිර වාද්‍ය", "අවනද්ධ වාද්‍ය", "ඝන වාද්‍ය"), 1, "සිතාරය තත් සහිත භාණ්ඩයක් බැවින් තත වාද්‍ය ගණයට අයත් වේ.")
-      4 -> Quad("සංගීතයේ 'තාලය' (Beat) මැනීම සඳහා භාවිත කරන උපකරණය කුමක්ද?", listOf("මෙට්‍රොනෝමය", "තර්මෝමීටරය", "බැරෝමීටරය", "ස්පීඩෝමීටරය"), 1, "සංගීතයේ වේගය සහ තාලය නිවැරදිව පවත්වා ගැනීමට මෙට්‍රොනෝමය යොදාගනී.")
-      else -> Quad("ශ්‍රී ලංකාවේ ප්‍රමුඛ සංගීතඥයෙකු වූ ආචාර්ය අමරදේවයන් ගැයූ ප්‍රකට ගීතයක් වන්නේ,", listOf("රත්නදීප ජන්ම භූමි", "සුදු හඳ එළියේ", "මාලනී ගීතය", "අම්මා රත්තරන්"), 1, "මහාචාර්ය අමරදේවයන් ශ්‍රී ලාංකීය සංගීතය ජාත්‍යන්තරයට ගෙන ගිය ශිල්පියෙකි.")
-    }
-    return MockExamQuestion(id = qNum, questionText = "[$qNum] $text", options = opts, correctOption = correct, explanation = exp, topicName = topic)
+    val cleanGrade = if (grade.contains("11")) "11" else "10"
+    val cleanTerm = if (term in 1..3) term else 1
+    val cleanPaper = if (paperIdx in 1..30) paperIdx else 1
+    val cleanQ = if (qNum in 1..60) qNum else 1
+    return MusicMockQuestionBank.getQuestion(cleanGrade, cleanTerm, cleanPaper, cleanQ)
   }
 
   fun generateDancingQuestion(grade: String, term: Int, paperIdx: Int, qNum: Int): MockExamQuestion {
-    val v = (paperIdx - 1) % 30
-    val topic = "නර්තනය (Dancing)"
-    val (text, opts, correct, exp) = when (qNum % 5) {
-      1 -> Quad("ශ්‍රී ලංකාවේ උඩරට නර්තන සම්ප්‍රදායේ ප්‍රධාන වාද්‍ය භාණ්ඩය කුමක්ද?", listOf("ගැටබෙරය", "පහතරට බෙරය", "තම්මැට්ටම", "දවුල"), 1, "ගැටබෙරය උඩරට නර්තනය සඳහාම ආවේණික වූ වාද්‍ය භාණ්ඩයයි.")
-      2 -> Quad("පහතරට නර්තන සම්ප්‍රදායට අයත් වන ප්‍රධාන ශාන්තිකර්මයක් වන්නේ කුමක්ද?", listOf("දහඅට සන්නිය", "කොහොඹා කංකාරිය", "කලගෙඩි නැටුම", "පන්තේරු නැටුම"), 1, "දහඅට සන්නිය යනු පහතරට බලිය සහ තොවිල් හා සම්බන්ධ ප්‍රධාන ශාන්තිකර්මයකි.")
-      3 -> Quad("උඩරට නර්තන ශිල්පියෙකු පළඳින සුවිශේෂී හිස් පළඳනාව හඳුන්වන්නේ කෙසේද?", listOf("වෙස් තට්ටුව", "ඔටුන්න", "ජටාව", "කරපටිය"), 1, "වෙස් තට්ටුව උඩරට නර්තන ශිල්පියාගේ ගරුත්වය විදහා දක්වන ප්‍රධාන ආභරණයයි.")
-      4 -> Quad("සබරගමුව නර්තන සම්ප්‍රදාය සඳහා භාවිත වන ප්‍රධාන බෙරය කුමක්ද?", listOf("දවුල", "ගැටබෙරය", "යාක් බෙරය", "උඩැක්කිය"), 1, "දවුල සබරගමුව නර්තන සම්ප්‍රදාය හා පන්සල් ආශ්‍රිත හේවිසි වාදනයට යොදාගනී.")
-      else -> Quad("නර්තනයක 'අභිනය' යන්නෙන් අදහස් වන්නේ කුමක්ද?", listOf("භාව ප්‍රකාශනය (Expressions)", "කකුල් චලනය", "වේගයෙන් කැරකීම", "බෙර වාදනය"), 1, "අභිනය යනු මුහුණේ සහ ශරීරයේ ඉරියව් මඟින් අදහස් ප්‍රකාශ කිරීමයි.")
-    }
-    return MockExamQuestion(id = qNum, questionText = "[$qNum] $text", options = opts, correctOption = correct, explanation = exp, topicName = topic)
+    val cleanGrade = if (grade.contains("11")) "11" else "10"
+    val cleanTerm = if (term in 1..3) term else 1
+    val cleanPaper = if (paperIdx in 1..30) paperIdx else 1
+    val cleanQ = if (qNum in 1..60) qNum else 1
+    return DancingMockQuestionBank.getQuestion(cleanGrade, cleanTerm, cleanPaper, cleanQ)
   }
 
   // --- TRUE/FALSE GENERATORS FOR THE MASTER HUB ---

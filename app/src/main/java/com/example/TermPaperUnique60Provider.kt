@@ -16,20 +16,11 @@ object TermPaperUnique60Provider {
     term: Int,
     paperIdx: Int
   ): List<MockExamQuestion> {
-    val questions = mutableListOf<MockExamQuestion>()
-    val seenInPaper = mutableSetOf<String>()
     val cleanTerm = if (term in 1..3) term else 1
     val cleanPaperIdx = if (paperIdx in 1..30) paperIdx else 1
-
+    val questions = ArrayList<MockExamQuestion>(60)
     for (qNum in 1..60) {
-      var q = buildDistinctQuestion(grade, subject, cleanTerm, cleanPaperIdx, qNum)
-      if (seenInPaper.contains(q.questionText)) {
-        val cleanBody = q.questionText.replace(Regex("^\\[\\d+\\]\\s*"), "")
-        val differentiatedText = "[$qNum] (${q.topicName}) $cleanBody"
-        q = q.copy(id = qNum, questionText = differentiatedText)
-      }
-      seenInPaper.add(q.questionText)
-      questions.add(q)
+      questions.add(buildDistinctQuestion(grade, subject, cleanTerm, cleanPaperIdx, qNum))
     }
     return questions
   }
@@ -42,10 +33,13 @@ object TermPaperUnique60Provider {
     qNum: Int
   ): MockExamQuestion {
     return when {
+      subject.contains("කෘෂි") -> {
+        BuddhismAndElectivesMockEngine.generateAgriQuestion(grade, term, paperIdx, qNum)
+      }
       subject.contains("භූගෝල") -> {
         BuddhismAndElectivesMockEngine.generateGeographyQuestion(grade, term, paperIdx, qNum)
       }
-      subject.contains("විද්‍යා") && !subject.contains("භූගෝල") -> {
+      subject.contains("විද්‍යා") -> {
         ScienceMockQuestionEngine.generateQuestion(grade, term, paperIdx, qNum)
       }
       subject.contains("ගණිත") -> {
@@ -66,20 +60,14 @@ object TermPaperUnique60Provider {
       subject.contains("ICT") || subject.contains("තොරතුරු") -> {
         BuddhismAndElectivesMockEngine.generateIctQuestion(grade, term, paperIdx, qNum)
       }
-      subject.contains("වාණිජ") || subject.contains("ගිණුම්") -> {
+      subject.contains("ව්‍යාපාර") || subject.contains("වාණිජ") || subject.contains("ගිණුම්") -> {
         BuddhismAndElectivesMockEngine.generateCommerceQuestion(grade, term, paperIdx, qNum)
       }
       subject.contains("පුරවැසි") -> {
         BuddhismAndElectivesMockEngine.generateCivicsQuestion(grade, term, paperIdx, qNum)
       }
-      subject.contains("භූගෝල") -> {
-        BuddhismAndElectivesMockEngine.generateGeographyQuestion(grade, term, paperIdx, qNum)
-      }
       subject.contains("සෞඛ්‍ය") -> {
         BuddhismAndElectivesMockEngine.generateHealthQuestion(grade, term, paperIdx, qNum)
-      }
-      subject.contains("කෘෂි") -> {
-        BuddhismAndElectivesMockEngine.generateAgriQuestion(grade, term, paperIdx, qNum)
       }
       subject.contains("චිත්‍ර") -> {
         BuddhismAndElectivesMockEngine.generateArtQuestion(grade, term, paperIdx, qNum)
