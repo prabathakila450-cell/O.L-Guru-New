@@ -63,7 +63,7 @@ object CivicsMockPoolHelper {
     // 5. ShortAnswerMasterRepository Grade 10 & Grade 11 Civics (~400 specs)
     raw.addAll(buildPoolFromShortAnswers("පුරවැසි අධ්‍යාපනය"))
 
-    return ExamQuestionHelper.distributeProportionallyAcrossTopics(dedupPool(raw))
+    return dedupPool(raw)
   }
 
   private fun extractFromCivicsProvider(): List<QSpec> {

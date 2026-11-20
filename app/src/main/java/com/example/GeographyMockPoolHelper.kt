@@ -46,7 +46,7 @@ object GeographyMockPoolHelper {
     // 4. ShortAnswerMasterRepository Grade 10 & Grade 11 Geography (~400 specs)
     raw.addAll(buildPoolFromShortAnswers("භූගෝල විද්‍යාව"))
 
-    return ExamQuestionHelper.distributeProportionallyAcrossTopics(dedupPool(raw))
+    return dedupPool(raw)
   }
 
   private fun buildParametricGeography(): List<QSpec> {

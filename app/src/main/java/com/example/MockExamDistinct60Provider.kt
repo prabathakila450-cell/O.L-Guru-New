@@ -29,11 +29,7 @@ object MockExamDistinct60Provider {
     qNum: Int
   ): MockExamQuestion {
     val normSubject = when {
-      subject.contains("කෘෂි") || subject.contains("agri", ignoreCase = true) -> "agri"
       subject.contains("භූගෝල") -> "geography"
-      subject.contains("චිත්‍ර") -> "art"
-      subject.contains("සංගීත") -> "music"
-      subject.contains("නර්තන") -> "dancing"
       subject.contains("විද්‍යාව") && !subject.contains("භූගෝල") -> "science"
       subject.contains("ගණිතය") -> "math"
       subject.contains("ඉතිහාසය") -> "history"
@@ -41,17 +37,13 @@ object MockExamDistinct60Provider {
       subject.contains("ඉංග්‍රීසි") || subject.contains("English") -> "english"
       subject.contains("බුද්ධ") || subject.contains("ආගම") -> "buddhism"
       subject.contains("ICT") || subject.contains("තොරතුරු") -> "ict"
-      subject.contains("වාණිජ") || subject.contains("ගිණුම්") || subject.contains("ව්‍යාපාර") -> "commerce"
+      subject.contains("වාණිජ") || subject.contains("ගිණුම්") -> "commerce"
       subject.contains("පුරවැසි") -> "civics"
       subject.contains("සෞඛ්‍ය") || subject.contains("health", ignoreCase = true) -> "health"
       else -> "science"
     }
 
     return when (normSubject) {
-      "agri" -> AgriMockPoolHelper.getQuestion(grade, term, paperIdx, qNum)
-      "art" -> ArtMockQuestionBank.getQuestion(if (grade.contains("11")) "11" else "10", term, paperIdx, qNum)
-      "music" -> MusicMockQuestionBank.getQuestion(if (grade.contains("11")) "11" else "10", term, paperIdx, qNum)
-      "dancing" -> DancingMockQuestionBank.getQuestion(if (grade.contains("11")) "11" else "10", term, paperIdx, qNum)
       "science" -> buildScienceDistinctQuestion(term, grade, paperIdx, qNum)
       "math" -> buildMathDistinctQuestion(term, grade, paperIdx, qNum)
       "history" -> buildHistoryDistinctQuestion(term, grade, paperIdx, qNum)

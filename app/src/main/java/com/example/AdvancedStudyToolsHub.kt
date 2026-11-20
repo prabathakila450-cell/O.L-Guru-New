@@ -1869,21 +1869,12 @@ fun TimedPastPaperSimulatorScreen(
 
               Text("විෂය (Subject):", color = Color(0xFFBAE6FD), fontSize = 11.5.sp)
               val subjects = listOf(
-                "විද්‍යාව (Science)",
-                "ගණිතය (Mathematics)",
-                "ඉතිහාසය (History)",
+                "විද්‍යාව (Science)", 
+                "ඉතිහාසය (History)", 
+                "බුද්ධ ධර්මය (Buddhism)", 
                 "සිංහල (Sinhala)",
-                "ඉංග්‍රීසි (English)",
-                "බුද්ධ ධර්මය (Buddhism)",
-                "තොරතුරු තාක්ෂණය (ICT)",
-                "ව්‍යාපාර හා ගිණුම්කරණය (Commerce)",
-                "පුරවැසි අධ්‍යාපනය (Civics)",
-                "භූගෝල විද්‍යාව (Geography)",
-                "සෞඛ්‍ය හා ශාරීරික අධ්‍යාපනය (Health)",
-                "කෘෂි විද්‍යාව (Agriculture)",
-                "චිත්‍ර කලාව (Art)",
-                "සංගීතය (Music)",
-                "නර්තනය (Dancing)"
+                "ගණිතය (Mathematics)",
+                "ඉංග්‍රීසි (English)"
               )
               LazyRow(horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.padding(vertical = 4.dp)) {
                 items(subjects) { subj ->

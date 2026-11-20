@@ -31,11 +31,11 @@ object BuddhismAndElectivesMockEngine {
   }
 
   fun generateGeographyQuestion(grade: String, term: Int, paperIdx: Int, qNum: Int): MockExamQuestion {
-    return if (grade.contains("11")) {
-      GeographyGrade11QuestionBank.getQuestion(term, paperIdx, qNum)
-    } else {
-      GeographyGrade10QuestionBank.getQuestion(term, paperIdx, qNum)
-    }
+    val cleanGrade = if (grade.contains("11")) "11" else "10"
+    val cleanTerm = term.coerceIn(1, 3)
+    val cleanPaper = paperIdx.coerceIn(1, 30)
+    val cleanQ = qNum.coerceIn(1, 60)
+    return GeographyLiveExamQuestionBank.getQuestion(cleanGrade, cleanTerm, cleanPaper, cleanQ)
   }
 
   fun generateHealthQuestion(grade: String, term: Int, paperIdx: Int, qNum: Int): MockExamQuestion {

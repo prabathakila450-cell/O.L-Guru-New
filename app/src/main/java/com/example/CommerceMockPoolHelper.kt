@@ -50,7 +50,7 @@ object CommerceMockPoolHelper {
     // 5. ShortAnswerMasterRepository Commerce G10 + G11 (~400 items)
     raw.addAll(buildPoolFromShortAnswers("ව්‍යාපාර හා ගිණුම්කරණය"))
 
-    return ExamQuestionHelper.distributeProportionallyAcrossTopics(dedupPool(raw))
+    return dedupPool(raw)
   }
 
   private fun buildDoubleEntryPool(): List<QSpec> {

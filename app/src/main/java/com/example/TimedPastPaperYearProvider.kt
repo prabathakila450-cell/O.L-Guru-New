@@ -2,11 +2,11 @@ package com.example
 
 /**
  * Authentic, Year-by-Year Past Paper Simulator Provider.
- * Generates distinct, curriculum-accurate past paper questions tailored for each specific year (2018-2024).
+ * Generates distinct, curriculum-accurate past paper questions tailored for each specific year (2024, 2023, 2022, 2021, 2020, 2019).
  * Guarantees that:
- * 1. Papers vary distinctly from year to year across all 15 O/L subjects.
+ * 1. Papers vary distinctly from year to year.
  * 2. Every paper contains 60 distinct questions without repetitions.
- * 3. 100% accurate 0-based correctOptionIndex with balanced answers and rich Sinhala explanations.
+ * 3. 100% correct answers with rich explanations.
  */
 object TimedPastPaperYearProvider {
 
@@ -140,4 +140,10 @@ object TimedPastPaperYearProvider {
     return DancingPastPaper60QuestionsProvider.buildDancingQuestion(year, qNum, yearStr, subjectTitle)
   }
 
+  private data class Quad(
+    val text: String,
+    val options: List<String>,
+    val correctIdx: Int,
+    val explanation: String
+  )
 }

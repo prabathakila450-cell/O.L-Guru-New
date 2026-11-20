@@ -12,11 +12,7 @@ object LanguageMockQuestionEngine {
     val cleanPaper = if (paperIdx in 1..30) paperIdx else 1
     val cleanQ = if (qNum in 1..60) qNum else 1
 
-    return if (cleanGrade == "10") {
-      SinhalaGrade10QuestionBank.getQuestion(cleanTerm, cleanPaper, cleanQ)
-    } else {
-      SinhalaGrade11QuestionBank.getQuestion(cleanTerm, cleanPaper, cleanQ)
-    }
+    return SinhalaLiveExamQuestionBank.getQuestion(cleanGrade, cleanTerm, cleanPaper, cleanQ)
   }
 
   fun generateEnglishQuestion(grade: String, term: Int, paperIdx: Int, qNum: Int): MockExamQuestion {
