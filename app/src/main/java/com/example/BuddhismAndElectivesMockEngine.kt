@@ -54,14 +54,6 @@ object BuddhismAndElectivesMockEngine {
     }
   }
 
-  fun generateArtQuestion(grade: String, term: Int, paperIdx: Int, qNum: Int): MockExamQuestion {
-    val cleanGrade = if (grade.contains("11")) "11" else "10"
-    val cleanTerm = if (term in 1..3) term else 1
-    val cleanPaper = if (paperIdx in 1..30) paperIdx else 1
-    val cleanQ = if (qNum in 1..60) qNum else 1
-    return ArtMockQuestionBank.getQuestion(cleanGrade, cleanTerm, cleanPaper, cleanQ)
-  }
-
   fun generateMusicQuestion(grade: String, term: Int, paperIdx: Int, qNum: Int): MockExamQuestion {
     val cleanGrade = if (grade.contains("11")) "11" else "10"
     val cleanTerm = if (term in 1..3) term else 1

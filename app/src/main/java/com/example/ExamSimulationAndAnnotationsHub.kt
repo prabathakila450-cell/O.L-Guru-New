@@ -198,15 +198,6 @@ val liveExamSubjectsList = listOf(
     syllabusSummaryBrief = "භෝග වගාව, පාංශු පාලනය, සත්ත්ව පාලනය"
   ),
   LiveExamSubjectInfo(
-    subjectName = "චිත්‍ර කලාව",
-    subjectEnglish = "Art",
-    icon = "🎨",
-    color = Color(0xFFF43F5E),
-    badge = "ප්‍රශ්න පත්‍ර 30",
-    papersCountDesc = "වාරයකට පත්‍ර 30 • ප්‍රශ්න 60 බැගින්",
-    syllabusSummaryBrief = "කලා ඉතිහාසය, වර්ණ සංයෝජනය, චිත්‍ර කලාව"
-  ),
-  LiveExamSubjectInfo(
     subjectName = "සංගීතය",
     subjectEnglish = "Music",
     icon = "🎸",

@@ -26,7 +26,6 @@ object MockExamDataBank {
     "ව්‍යාපාර හා ගිණුම්කරණ අධ්‍යයනය",
     "සෞඛ්‍ය හා ශාරීරික අධ්‍යාපනය",
     "කෘෂි විද්‍යාව",
-    "චිත්‍ර කලාව",
     "සංගීතය",
     "නර්තනය"
   )
@@ -73,6 +72,9 @@ object MockExamDataBank {
     term: Int,
     subject: String
   ): List<MockExamPaper> {
+    if (subject.contains("චිත්‍ර") || subject.equals("Art", ignoreCase = true)) {
+      return emptyList()
+    }
     val cleanGrade = if (grade.contains("11")) "11"
     else if (grade.contains("10")) "10"
     else if (grade.contains("9") || grade.contains("09")) "09"

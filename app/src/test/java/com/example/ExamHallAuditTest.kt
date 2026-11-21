@@ -21,9 +21,9 @@ class ExamHallAuditTest {
   private val trailingParenNumRegex = Regex("\\(\\d+\\)\\??$")
 
   @Test
-  fun auditAll15Subjects() {
+  fun auditAllAvailableSubjects() {
     val subjects = MockExamDataBank.AVAILABLE_SUBJECTS
-    assertTrue("Must audit all 15 O/L subjects", subjects.size == 15)
+    assertTrue("Must audit all 14 available O/L subjects", subjects.size == 14)
     val grades = listOf("10", "11")
     val terms = listOf(1, 2, 3)
 
@@ -122,7 +122,7 @@ class ExamHallAuditTest {
   }
 
   @Test
-  fun testAnswerDistributionBalancedAll15Subjects() {
+  fun testAnswerDistributionBalancedAllAvailableSubjects() {
     for (subject in MockExamDataBank.AVAILABLE_SUBJECTS) {
       val counts = IntArray(4)
       val paper = MockExamDataBank.getPapersForTermAndSubject("11", 1, subject).first()

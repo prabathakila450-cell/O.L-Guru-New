@@ -69,9 +69,6 @@ object TermPaperUnique60Provider {
       subject.contains("සෞඛ්‍ය") -> {
         BuddhismAndElectivesMockEngine.generateHealthQuestion(grade, term, paperIdx, qNum)
       }
-      subject.contains("චිත්‍ර") -> {
-        BuddhismAndElectivesMockEngine.generateArtQuestion(grade, term, paperIdx, qNum)
-      }
       subject.contains("සංගීත") -> {
         BuddhismAndElectivesMockEngine.generateMusicQuestion(grade, term, paperIdx, qNum)
       }

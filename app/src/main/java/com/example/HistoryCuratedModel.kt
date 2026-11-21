@@ -14,7 +14,7 @@ data class HistoryCuratedQuestion(
   val topic: HistoryTopicDomain
 ) {
   fun toQSpec(): ExamQuestionHelper.QSpec {
-    val correct = options.getOrElse(0) { "නිවැරදි පිළිතුර" }
+    val correct = options.getOrElse(correctIndex) { "නිවැරදි පිළිතුර" }
     val distractors = options.filterIndexed { idx, _ -> idx != correctIndex }
     return ExamQuestionHelper.QSpec(
       topic = topic.titleSinhala,
