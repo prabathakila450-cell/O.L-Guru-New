@@ -491,4 +491,31 @@ class ExamHallAuditTest {
     }
     assertTrue("Geography option balance & quality issues (${issues.size}):\n" + issues.take(40).joinToString("\n"), issues.isEmpty())
   }
+
+  @Test
+  fun testGeographyGrade11Term1Paper2Distinctness() {
+    val papers = MockExamDataBank.getPapersForTermAndSubject("11 ශ්‍රේණිය", 1, "භූගෝල විද්‍යාව")
+    assertTrue("Expected 30 Geography papers", papers.size == 30)
+    val paper2 = papers[1]
+    assertTrue("Expected Paper 2", paper2.paperNumber == 2)
+    assertTrue("Expected 60 questions in Paper 2", paper2.questions.size == 60)
+
+    val seenStems = HashSet<String>(60)
+    for (q in paper2.questions) {
+      val stem = q.questionText
+      assertTrue("Paper 2 Q${q.id} must not contain legacy numbered suffix or Inner Core fallback: $stem",
+        !stem.contains("Inner Core") &&
+        !stem.contains("ආදර්ශ පත්‍රය") &&
+        !trailingParenNumRegex.containsMatchIn(stem)
+      )
+      assertTrue("Paper 2 Q${q.id} must have a distinct core stem: $stem",
+        seenStems.add(extractCoreStem(stem).lowercase())
+      )
+    }
+    val q3 = paper2.questions[2]
+    val q4 = paper2.questions[3]
+    assertTrue("Paper 2 Q3 and Q4 must be completely distinct questions",
+      extractCoreStem(q3.questionText) != extractCoreStem(q4.questionText)
+    )
+  }
 }
