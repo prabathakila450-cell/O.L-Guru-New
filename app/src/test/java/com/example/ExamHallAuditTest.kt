@@ -371,4 +371,124 @@ class ExamHallAuditTest {
     }
     assertTrue("Art option balance & quality issues (${issues.size}):\n" + issues.take(30).joinToString("\n"), issues.isEmpty())
   }
+
+  @Test
+  fun testGeographyOptionBalanceAndQuality() {
+    val subject = "භූගෝල විද්‍යාව"
+    val grades = listOf("10", "11")
+    val terms = listOf(1, 2, 3)
+
+    val domainSizes = GeographyLiveExamQuestionBank.domainSizes()
+    assertTrue("Expected 10 Geography domains, got ${domainSizes.size}", domainSizes.size == 10)
+    domainSizes.forEachIndexed { idx, size ->
+      assertTrue("Geography domain $idx must have >= 180 unique questions for 30 papers/term, got $size", size >= 180)
+    }
+
+    val issues = ArrayList<String>()
+    val lazySubstrings = listOf(
+      "වෙනසක් නැත", "කිසිදු වෙනසක් නැත", "සිනමා තහනම්", "වැදගත් නොවේ",
+      "වැදගත් නැත", "එපා වීම", "එවැන්නක් නැත", "කිසිවක් නැත", "අදාළ නොවේ",
+      "පෲථිවිය", "විද්යා", "ඉහත සියල්ල වැරදිය", "පිළිතුරක් නොමැත"
+    )
+    var totalQuestionsAudited = 0
+    val uniqueIssues = linkedSetOf<String>()
+
+    for (grade in grades) {
+      for (term in terms) {
+        val papers = MockExamDataBank.getPapersForTermAndSubject(grade, term, subject)
+        if (papers.size != 30) {
+          issues.add("G$grade T$term: expected 30 papers, got ${papers.size}")
+        }
+        val termStems = HashSet<String>(1800)
+
+        for (paper in papers) {
+          if (paper.questions.size != 60) {
+            issues.add("G$grade T$term P${paper.paperNumber}: expected 60 questions, got ${paper.questions.size}")
+          }
+          val paperStems = HashSet<String>(60)
+          val slotCounts = IntArray(4)
+
+          for (q in paper.questions) {
+            totalQuestionsAudited++
+            val core = extractCoreStem(q.questionText)
+            if (!paperStems.add(core.lowercase())) {
+              issues.add("G$grade T$term P${paper.paperNumber} Q${q.id}: Intra-paper duplicate stem: $core")
+            }
+            if (!termStems.add(core.lowercase())) {
+              issues.add("G$grade T$term P${paper.paperNumber} Q${q.id}: Cross-paper duplicate stem in term: $core")
+            }
+            if (q.explanation.isBlank()) {
+              issues.add("G$grade T$term P${paper.paperNumber} Q${q.id}: Blank explanation")
+            }
+            if (q.correctOption !in 1..4) {
+              issues.add("G$grade T$term P${paper.paperNumber} Q${q.id}: Invalid correctOption ${q.correctOption}")
+            } else {
+              slotCounts[q.correctOption - 1]++
+            }
+            val opts = q.options
+            if (opts.size != 4) {
+              issues.add("G$grade T$term P${paper.paperNumber} Q${q.id}: Invalid options size ${opts.size}")
+              continue
+            }
+            if (opts.distinct().size != 4) {
+              issues.add("G$grade T$term P${paper.paperNumber} Q${q.id}: Duplicate options: $opts")
+            }
+
+            if (lazySubstrings.any { bad -> core.contains(bad) || q.explanation.contains(bad) || opts.any { it.contains(bad) } }) {
+              val msg = "[LAZY/SPELL] (${q.topicName}) $core | opts=$opts"
+              if (uniqueIssues.add(core)) issues.add(msg)
+            }
+
+            for (opt in opts) {
+              if (opt.isBlank()) {
+                issues.add("Blank option in $core")
+              }
+              if (opt.matches(Regex("^[1-4][.)]\\s+[^0-9].*")) || opt.matches(Regex("^\\([1-4]\\)\\s*[^0-9].*"))) {
+                if (uniqueIssues.add("prefix:$core")) issues.add("[PREFIX] $core -> '$opt'")
+              }
+              if (opt.contains(": ") && !opt.contains(" : ")) {
+                if (uniqueIssues.add("colon:$core")) issues.add("[COLON] $core -> '$opt'")
+              }
+            }
+
+            val lengths = opts.map { it.length }
+            val minLen = lengths.minOrNull() ?: 1
+            val maxLen = lengths.maxOrNull() ?: 1
+            val ratio = maxLen.toDouble() / minLen.coerceAtLeast(1)
+            val wordCounts = opts.map { it.trim().split(Regex("\\s+")).filter { w -> w.isNotBlank() }.size }
+            val minWords = wordCounts.minOrNull() ?: 1
+            val maxWords = wordCounts.maxOrNull() ?: 1
+            if ((maxLen >= 30 && ratio >= 2.0) || (maxWords >= 8 && minWords <= 3)) {
+              val msg = "[IMBAL maxL=$maxLen minL=$minLen ratio=${"%.1f".format(ratio)} words=$wordCounts] (${q.topicName}) $core | opts=$opts"
+              if (uniqueIssues.add("imbal:$core")) issues.add(msg)
+            }
+            if (q.correctOption in 1..4) {
+              val correctOpt = opts[q.correctOption - 1]
+              val distractors = opts.filterIndexed { idx, _ -> idx != q.correctOption - 1 }
+              val avgDistractorLen = distractors.map { it.length }.average()
+              if (correctOpt.length >= 35 && correctOpt.length > avgDistractorLen * 1.45) {
+                val msg = "[CORRECT_TOO_LONG cLen=${correctOpt.length} avgD=${"%.1f".format(avgDistractorLen)}] (${q.topicName}) $core | opts=$opts"
+                if (uniqueIssues.add("ctoolong:$core")) issues.add(msg)
+              }
+            }
+          }
+          for (s in 0..3) {
+            if (slotCounts[s] < 6) {
+              issues.add("G$grade T$term P${paper.paperNumber}: Answer slot ${s + 1} starved (${slotCounts.toList()})")
+            }
+          }
+        }
+        if (termStems.size != 1800) {
+          issues.add("G$grade T$term: expected 1800 unique stems across 30 papers, got ${termStems.size}")
+        }
+      }
+    }
+
+    println("AUDITED $totalQuestionsAudited GEOGRAPHY QUESTIONS. Domain sizes=$domainSizes. Unique issues found: ${issues.size}")
+    if (issues.isNotEmpty()) {
+      println("ALL UNIQUE GEOGRAPHY ISSUES (${issues.size}):")
+      issues.forEach { println(" - $it") }
+    }
+    assertTrue("Geography option balance & quality issues (${issues.size}):\n" + issues.take(40).joinToString("\n"), issues.isEmpty())
+  }
 }
