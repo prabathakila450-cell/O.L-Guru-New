@@ -23,7 +23,7 @@ class ExamHallAuditTest {
   @Test
   fun auditAllAvailableSubjects() {
     val subjects = MockExamDataBank.AVAILABLE_SUBJECTS
-    assertTrue("Must audit all 14 available O/L subjects", subjects.size == 14)
+    assertTrue("Must audit all 15 available O/L subjects", subjects.size == 15)
     val grades = listOf("10", "11")
     val terms = listOf(1, 2, 3)
 
@@ -128,5 +128,247 @@ class ExamHallAuditTest {
         )
       }
     }
+  }
+
+  @Test
+  fun testScienceOptionBalanceAndQuality() {
+    val subject = "විද්‍යාව"
+    val grades = listOf("10", "11")
+    val terms = listOf(1, 2, 3)
+
+    val issues = ArrayList<String>()
+    var totalQuestionsAudited = 0
+
+    for (grade in grades) {
+      for (term in terms) {
+        val papers = MockExamDataBank.getPapersForTermAndSubject(grade, term, subject)
+        for (paper in papers) {
+          for (q in paper.questions) {
+            totalQuestionsAudited++
+            val opts = q.options
+            if (opts.size != 4) {
+              issues.add("G$grade T$term P${paper.paperNumber} Q${q.id}: Invalid options size ${opts.size}")
+              continue
+            }
+            if (opts.distinct().size != 4) {
+              issues.add("G$grade T$term P${paper.paperNumber} Q${q.id}: Duplicate options: $opts")
+            }
+            for (opt in opts) {
+              if (opt.isBlank()) {
+                issues.add("G$grade T$term P${paper.paperNumber} Q${q.id}: Blank option found")
+              }
+              if (opt.matches(Regex("^[1-4][.)]\\s+[^0-9].*")) || opt.matches(Regex("^\\([1-4]\\)\\s*[^0-9].*"))) {
+                issues.add("G$grade T$term P${paper.paperNumber} Q${q.id}: Number prefix in option: '$opt'")
+              }
+              if (opt.contains(": ") && !opt.contains(" : ")) {
+                issues.add("G$grade T$term P${paper.paperNumber} Q${q.id}: Colon in option: '$opt'")
+              }
+            }
+            val lengths = opts.map { it.length }
+            val minLen = lengths.minOrNull() ?: 1
+            val maxLen = lengths.maxOrNull() ?: 1
+            val ratio = maxLen.toDouble() / minLen.coerceAtLeast(1)
+            if (maxLen >= 35 && ratio >= 3.0) {
+              issues.add("G$grade T$term P${paper.paperNumber} Q${q.id}: Option length imbalance (max=$maxLen, min=$minLen, ratio=%.1f): %s".format(ratio, opts))
+            }
+          }
+        }
+      }
+    }
+
+    println("AUDITED $totalQuestionsAudited SCIENCE QUESTIONS. Issues found: ${issues.size}")
+    if (issues.isNotEmpty()) {
+      println("ALL ISSUES:")
+      issues.forEach { println(" - $it") }
+    }
+    assertTrue("Science option balance & quality issues (${issues.size}):\n" + issues.take(30).joinToString("\n"), issues.isEmpty())
+  }
+
+  @Test
+  fun testEnglishOptionBalanceAndQuality() {
+    val subject = "ඉංග්‍රීසි"
+    val grades = listOf("10", "11")
+    val terms = listOf(1, 2, 3)
+
+    val domainSizes = EnglishLiveExamQuestionBank.domainSizes()
+    assertTrue("Expected 10 English domains, got ${domainSizes.size}", domainSizes.size == 10)
+    domainSizes.forEachIndexed { idx, size ->
+      assertTrue("English domain $idx must have >= 180 unique questions for 30 papers/term, got $size", size >= 180)
+    }
+
+    val issues = ArrayList<String>()
+    var totalQuestionsAudited = 0
+
+    for (grade in grades) {
+      for (term in terms) {
+        val papers = MockExamDataBank.getPapersForTermAndSubject(grade, term, subject)
+        if (papers.size != 30) {
+          issues.add("G$grade T$term: expected 30 papers, got ${papers.size}")
+        }
+        val termStems = HashSet<String>(1800)
+
+        for (paper in papers) {
+          if (paper.questions.size != 60) {
+            issues.add("G$grade T$term P${paper.paperNumber}: expected 60 questions, got ${paper.questions.size}")
+          }
+          val paperStems = HashSet<String>(60)
+          val slotCounts = IntArray(4)
+
+          for (q in paper.questions) {
+            totalQuestionsAudited++
+            val core = extractCoreStem(q.questionText)
+            if (!paperStems.add(core.lowercase())) {
+              issues.add("G$grade T$term P${paper.paperNumber} Q${q.id}: Intra-paper duplicate stem: $core")
+            }
+            if (!termStems.add(core.lowercase())) {
+              issues.add("G$grade T$term P${paper.paperNumber} Q${q.id}: Cross-paper duplicate stem in term: $core")
+            }
+            if (q.explanation.isBlank()) {
+              issues.add("G$grade T$term P${paper.paperNumber} Q${q.id}: Blank explanation")
+            }
+            if (q.correctOption !in 1..4) {
+              issues.add("G$grade T$term P${paper.paperNumber} Q${q.id}: Invalid correctOption ${q.correctOption}")
+            } else {
+              slotCounts[q.correctOption - 1]++
+            }
+            val opts = q.options
+            if (opts.size != 4) {
+              issues.add("G$grade T$term P${paper.paperNumber} Q${q.id}: Invalid options size ${opts.size}")
+              continue
+            }
+            if (opts.distinct().size != 4) {
+              issues.add("G$grade T$term P${paper.paperNumber} Q${q.id}: Duplicate options: $opts")
+            }
+            for (opt in opts) {
+              if (opt.isBlank()) {
+                issues.add("G$grade T$term P${paper.paperNumber} Q${q.id}: Blank option found")
+              }
+              if (opt.matches(Regex("^[1-4][.)]\\s+[^0-9].*")) || opt.matches(Regex("^\\([1-4]\\)\\s*[^0-9].*"))) {
+                issues.add("G$grade T$term P${paper.paperNumber} Q${q.id}: Number prefix in option: '$opt'")
+              }
+              if (opt.contains(": ") && !opt.contains(" : ")) {
+                issues.add("G$grade T$term P${paper.paperNumber} Q${q.id}: Colon in option: '$opt'")
+              }
+            }
+            val lengths = opts.map { it.length }
+            val minLen = lengths.minOrNull() ?: 1
+            val maxLen = lengths.maxOrNull() ?: 1
+            val ratio = maxLen.toDouble() / minLen.coerceAtLeast(1)
+            if (maxLen >= 35 && ratio >= 3.0) {
+              issues.add("G$grade T$term P${paper.paperNumber} Q${q.id}: Option length imbalance (max=$maxLen, min=$minLen, ratio=%.1f): %s".format(ratio, opts))
+            }
+          }
+          for (s in 0..3) {
+            if (slotCounts[s] < 6) {
+              issues.add("G$grade T$term P${paper.paperNumber}: Answer slot ${s + 1} starved (${slotCounts.toList()})")
+            }
+          }
+        }
+        if (termStems.size != 1800) {
+          issues.add("G$grade T$term: expected 1800 unique stems across 30 papers, got ${termStems.size}")
+        }
+      }
+    }
+
+    println("AUDITED $totalQuestionsAudited ENGLISH QUESTIONS. Domain sizes=$domainSizes. Issues found: ${issues.size}")
+    if (issues.isNotEmpty()) {
+      println("ALL ENGLISH ISSUES:")
+      issues.take(50).forEach { println(" - $it") }
+    }
+    assertTrue("English option balance & quality issues (${issues.size}):\n" + issues.take(30).joinToString("\n"), issues.isEmpty())
+  }
+
+  @Test
+  fun testArtOptionBalanceAndQuality() {
+    val subject = "චිත්‍ර කලාව"
+    val grades = listOf("10", "11")
+    val terms = listOf(1, 2, 3)
+
+    val domainSizes = ArtLiveExamQuestionBank.domainSizes()
+    assertTrue("Expected 10 Art domains, got ${domainSizes.size}", domainSizes.size == 10)
+    domainSizes.forEachIndexed { idx, size ->
+      assertTrue("Art domain $idx must have >= 180 unique questions for 30 papers/term, got $size", size >= 180)
+    }
+
+    val issues = ArrayList<String>()
+    var totalQuestionsAudited = 0
+
+    for (grade in grades) {
+      for (term in terms) {
+        val papers = MockExamDataBank.getPapersForTermAndSubject(grade, term, subject)
+        if (papers.size != 30) {
+          issues.add("G$grade T$term: expected 30 papers, got ${papers.size}")
+        }
+        val termStems = HashSet<String>(1800)
+
+        for (paper in papers) {
+          if (paper.questions.size != 60) {
+            issues.add("G$grade T$term P${paper.paperNumber}: expected 60 questions, got ${paper.questions.size}")
+          }
+          val paperStems = HashSet<String>(60)
+          val slotCounts = IntArray(4)
+
+          for (q in paper.questions) {
+            totalQuestionsAudited++
+            val core = extractCoreStem(q.questionText)
+            if (!paperStems.add(core.lowercase())) {
+              issues.add("G$grade T$term P${paper.paperNumber} Q${q.id}: Intra-paper duplicate stem: $core")
+            }
+            if (!termStems.add(core.lowercase())) {
+              issues.add("G$grade T$term P${paper.paperNumber} Q${q.id}: Cross-paper duplicate stem in term: $core")
+            }
+            if (q.explanation.isBlank()) {
+              issues.add("G$grade T$term P${paper.paperNumber} Q${q.id}: Blank explanation")
+            }
+            if (q.correctOption !in 1..4) {
+              issues.add("G$grade T$term P${paper.paperNumber} Q${q.id}: Invalid correctOption ${q.correctOption}")
+            } else {
+              slotCounts[q.correctOption - 1]++
+            }
+            val opts = q.options
+            if (opts.size != 4) {
+              issues.add("G$grade T$term P${paper.paperNumber} Q${q.id}: Invalid options size ${opts.size}")
+              continue
+            }
+            if (opts.distinct().size != 4) {
+              issues.add("G$grade T$term P${paper.paperNumber} Q${q.id}: Duplicate options: $opts")
+            }
+            for (opt in opts) {
+              if (opt.isBlank()) {
+                issues.add("G$grade T$term P${paper.paperNumber} Q${q.id}: Blank option found")
+              }
+              if (opt.matches(Regex("^[1-4][.)]\\s+[^0-9].*")) || opt.matches(Regex("^\\([1-4]\\)\\s*[^0-9].*"))) {
+                issues.add("G$grade T$term P${paper.paperNumber} Q${q.id}: Number prefix in option: '$opt'")
+              }
+              if (opt.contains(": ") && !opt.contains(" : ")) {
+                issues.add("G$grade T$term P${paper.paperNumber} Q${q.id}: Colon in option: '$opt'")
+              }
+            }
+            val lengths = opts.map { it.length }
+            val minLen = lengths.minOrNull() ?: 1
+            val maxLen = lengths.maxOrNull() ?: 1
+            val ratio = maxLen.toDouble() / minLen.coerceAtLeast(1)
+            if (maxLen >= 35 && ratio >= 3.0) {
+              issues.add("G$grade T$term P${paper.paperNumber} Q${q.id}: Option length imbalance (max=$maxLen, min=$minLen, ratio=%.1f): %s".format(ratio, opts))
+            }
+          }
+          for (s in 0..3) {
+            if (slotCounts[s] < 6) {
+              issues.add("G$grade T$term P${paper.paperNumber}: Answer slot ${s + 1} starved (${slotCounts.toList()})")
+            }
+          }
+        }
+        if (termStems.size != 1800) {
+          issues.add("G$grade T$term: expected 1800 unique stems across 30 papers, got ${termStems.size}")
+        }
+      }
+    }
+
+    println("AUDITED $totalQuestionsAudited ART QUESTIONS. Domain sizes=$domainSizes. Issues found: ${issues.size}")
+    if (issues.isNotEmpty()) {
+      println("ALL ART ISSUES:")
+      issues.take(50).forEach { println(" - $it") }
+    }
+    assertTrue("Art option balance & quality issues (${issues.size}):\n" + issues.take(30).joinToString("\n"), issues.isEmpty())
   }
 }

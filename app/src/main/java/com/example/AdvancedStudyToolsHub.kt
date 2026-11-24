@@ -1764,6 +1764,13 @@ val samplePastPaperQuestions = listOf(
 fun TimedPastPaperSimulatorScreen(
   onBack: () -> Unit
 ) {
+  val context = LocalContext.current
+  val completedTimedPapers = remember {
+    mutableStateMapOf<String, Boolean>().apply {
+      CompletionTrackingStore.getCompletedTimedPaperKeys(context).forEach { put(it, true) }
+    }
+  }
+
   var selectedYear by remember { mutableStateOf("2023") }
   var selectedSubject by remember { mutableStateOf("විද්‍යාව (Science)") }
   var examDurationMinutes by remember { mutableIntStateOf(60) } // Default 60 Minutes as requested
@@ -1772,6 +1779,14 @@ fun TimedPastPaperSimulatorScreen(
   var currentQuestionIndex by remember { mutableIntStateOf(0) }
   val studentAnswers = remember { mutableStateMapOf<Int, Int>() } // questionId -> optionIndex
   var remainingSeconds by remember { mutableIntStateOf(60 * 60) } // 60 minutes = 3600 seconds
+
+  // Persist completion when timed past paper finishes
+  LaunchedEffect(isExamFinished) {
+    if (isExamFinished) {
+      CompletionTrackingStore.markTimedPaperCompleted(context, selectedSubject, selectedYear)
+      completedTimedPapers[CompletionTrackingStore.timedPaperKey(selectedSubject, selectedYear)] = true
+    }
+  }
 
   // Fetch exactly 60 questions for the selected subject and year, strictly interleaved across diverse topics
   val examQuestions = remember(selectedSubject, selectedYear) {
@@ -1829,11 +1844,17 @@ fun TimedPastPaperSimulatorScreen(
                 isExamRunning = false
                 isExamFinished = true
               },
-              colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFDC2626)),
+              colors = ButtonDefaults.buttonColors(
+                containerColor = Color(0xFFDC2626),
+                contentColor = Color.White
+              ),
               shape = RoundedCornerShape(8.dp),
-              contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp)
+              contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
+              modifier = Modifier
+                .defaultMinSize(minHeight = 48.dp)
+                .testTag("timed_finish_topbar_button")
             ) {
-              Text("අවසන් කරන්න", fontSize = 10.sp, fontWeight = FontWeight.Bold)
+              Text("අවසන් කරන්න", color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.Bold)
             }
           }
         },
@@ -1867,21 +1888,52 @@ fun TimedPastPaperSimulatorScreen(
               )
               Spacer(modifier = Modifier.height(10.dp))
 
-              Text("විෂය (Subject):", color = Color(0xFFBAE6FD), fontSize = 11.5.sp)
+              Text("විෂය (Subject — 15 O/L Subjects):", color = Color(0xFFBAE6FD), fontSize = 11.5.sp)
               val subjects = listOf(
-                "විද්‍යාව (Science)", 
-                "ඉතිහාසය (History)", 
-                "බුද්ධ ධර්මය (Buddhism)", 
-                "සිංහල (Sinhala)",
+                "විද්‍යාව (Science)",
                 "ගණිතය (Mathematics)",
-                "ඉංග්‍රීසි (English)"
+                "ඉතිහාසය (History)",
+                "සිංහල (Sinhala)",
+                "ඉංග්‍රීසි (English)",
+                "බුද්ධ ධර්මය (Buddhism)",
+                "තොරතුරු තාක්ෂණය (ICT)",
+                "ව්‍යාපාර හා ගිණුම්කරණය (Commerce)",
+                "පුරවැසි අධ්‍යාපනය (Civics)",
+                "භූගෝල විද්‍යාව (Geography)",
+                "සෞඛ්‍ය හා ශාරීරික අධ්‍යාපනය (Health)",
+                "කෘෂි විද්‍යාව (Agriculture)",
+                "චිත්‍ර කලාව (Art)",
+                "සංගීතය (Music)",
+                "නර්තනය (Dancing)"
               )
-              LazyRow(horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.padding(vertical = 4.dp)) {
+              LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.padding(vertical = 4.dp)) {
                 items(subjects) { subj ->
+                  val isSel = selectedSubject == subj
                   FilterChip(
-                    selected = selectedSubject == subj,
+                    selected = isSel,
                     onClick = { selectedSubject = subj },
-                    label = { Text(subj, fontSize = 11.sp) }
+                    colors = FilterChipDefaults.filterChipColors(
+                      containerColor = Color(0xFF0F172A),
+                      labelColor = Color(0xFFE2E8F0),
+                      selectedContainerColor = Color(0xFF0284C7),
+                      selectedLabelColor = Color.White
+                    ),
+                    border = FilterChipDefaults.filterChipBorder(
+                      enabled = true,
+                      selected = isSel,
+                      borderColor = Color(0xFF334155),
+                      selectedBorderColor = Color(0xFF38BDF8)
+                    ),
+                    modifier = Modifier
+                      .defaultMinSize(minHeight = 48.dp)
+                      .testTag("timed_subject_chip_$subj"),
+                    label = {
+                      Text(
+                        subj,
+                        fontSize = 11.5.sp,
+                        fontWeight = if (isSel) FontWeight.Bold else FontWeight.Medium
+                      )
+                    }
                   )
                 }
               }
@@ -1890,12 +1942,37 @@ fun TimedPastPaperSimulatorScreen(
 
               Text("වසර (Year):", color = Color(0xFFBAE6FD), fontSize = 11.5.sp)
               val years = listOf("2024", "2023", "2022", "2021", "2020", "2019", "2018")
-              LazyRow(horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.padding(vertical = 4.dp)) {
+              LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.padding(vertical = 4.dp)) {
                 items(years) { yr ->
+                  val isSel = selectedYear == yr
+                  val isYearCompleted = completedTimedPapers[
+                    CompletionTrackingStore.timedPaperKey(selectedSubject, yr)
+                  ] == true
                   FilterChip(
-                    selected = selectedYear == yr,
+                    selected = isSel,
                     onClick = { selectedYear = yr },
-                    label = { Text(yr, fontSize = 11.sp) }
+                    colors = FilterChipDefaults.filterChipColors(
+                      containerColor = Color(0xFF0F172A),
+                      labelColor = Color(0xFFE2E8F0),
+                      selectedContainerColor = Color(0xFF0284C7),
+                      selectedLabelColor = Color.White
+                    ),
+                    border = FilterChipDefaults.filterChipBorder(
+                      enabled = true,
+                      selected = isSel,
+                      borderColor = Color(0xFF334155),
+                      selectedBorderColor = Color(0xFF38BDF8)
+                    ),
+                    modifier = Modifier
+                      .defaultMinSize(minHeight = 48.dp)
+                      .testTag("timed_year_chip_$yr"),
+                    label = {
+                      Text(
+                        text = if (isYearCompleted) "$yr ✅ අවසන් කළා" else yr,
+                        fontSize = 11.5.sp,
+                        fontWeight = if (isSel) FontWeight.Bold else FontWeight.Medium
+                      )
+                    }
                   )
                 }
               }
@@ -1907,11 +1984,29 @@ fun TimedPastPaperSimulatorScreen(
                 FilterChip(
                   selected = examDurationMinutes == 60,
                   onClick = { examDurationMinutes = 60 },
+                  colors = FilterChipDefaults.filterChipColors(
+                    containerColor = Color(0xFF0F172A),
+                    labelColor = Color(0xFFE2E8F0),
+                    selectedContainerColor = Color(0xFF0284C7),
+                    selectedLabelColor = Color.White
+                  ),
+                  modifier = Modifier
+                    .defaultMinSize(minHeight = 48.dp)
+                    .testTag("timed_duration_60_chip"),
                   label = { Text("🏛️ 60 Min Standard (ප්‍රශ්න 60)", fontSize = 11.sp, fontWeight = FontWeight.Bold) }
                 )
                 FilterChip(
                   selected = examDurationMinutes == 45,
                   onClick = { examDurationMinutes = 45 },
+                  colors = FilterChipDefaults.filterChipColors(
+                    containerColor = Color(0xFF0F172A),
+                    labelColor = Color(0xFFE2E8F0),
+                    selectedContainerColor = Color(0xFF0284C7),
+                    selectedLabelColor = Color.White
+                  ),
+                  modifier = Modifier
+                    .defaultMinSize(minHeight = 48.dp)
+                    .testTag("timed_duration_45_chip"),
                   label = { Text("⚡ 45 Min Speed Run", fontSize = 11.sp) }
                 )
               }
@@ -1949,11 +2044,22 @@ fun TimedPastPaperSimulatorScreen(
                   isExamRunning = true
                   isExamFinished = false
                 },
-                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF0284C7)),
+                colors = ButtonDefaults.buttonColors(
+                  containerColor = Color(0xFF0284C7),
+                  contentColor = Color.White
+                ),
                 shape = RoundedCornerShape(10.dp),
-                modifier = Modifier.fillMaxWidth()
+                modifier = Modifier
+                  .fillMaxWidth()
+                  .defaultMinSize(minHeight = 48.dp)
+                  .testTag("timed_start_button")
               ) {
-                Text("විභාගය ආරම්භ කරන්න (විනාඩි 60 • ප්‍රශ්න 60) 🚀", fontSize = 12.5.sp, fontWeight = FontWeight.Bold)
+                Text(
+                  text = "විභාගය ආරම්භ කරන්න (විනාඩි $examDurationMinutes • ප්‍රශ්න 60) 🚀",
+                  color = Color.White,
+                  fontSize = 12.5.sp,
+                  fontWeight = FontWeight.Bold
+                )
               }
             }
           }
@@ -2064,12 +2170,14 @@ fun TimedPastPaperSimulatorScreen(
                     1.dp, 
                     if (isCurrent) Color(0xFF38BDF8) else if (isAnswered) Color(0xFF34D399) else Color(0xFF475569)
                   ),
-                  modifier = Modifier.size(30.dp)
+                  modifier = Modifier
+                    .size(48.dp)
+                    .testTag("timed_jump_q_${idx + 1}")
                 ) {
                   Box(contentAlignment = Alignment.Center) {
                     Text(
                       text = "${idx + 1}",
-                      fontSize = 10.sp,
+                      fontSize = 11.5.sp,
                       fontWeight = if (isCurrent) FontWeight.ExtraBold else FontWeight.Medium,
                       color = Color.White
                     )
@@ -2110,17 +2218,19 @@ fun TimedPastPaperSimulatorScreen(
                   border = BorderStroke(1.dp, if (isSelected) Color(0xFF38BDF8) else Color.White.copy(alpha = 0.15f)),
                   modifier = Modifier
                     .fillMaxWidth()
+                    .defaultMinSize(minHeight = 48.dp)
                     .padding(vertical = 3.5.dp)
+                    .testTag("timed_option_${optIndex + 1}")
                 ) {
                   Row(
-                    modifier = Modifier.padding(10.dp),
+                    modifier = Modifier.padding(12.dp),
                     verticalAlignment = Alignment.CenterVertically
                   ) {
                     Text(
                       text = "(${optIndex + 1})",
                       color = if (isSelected) Color(0xFF38BDF8) else Color(0xFF94A3B8),
                       fontWeight = FontWeight.Bold,
-                      fontSize = 12.sp
+                      fontSize = 12.5.sp
                     )
                     Spacer(modifier = Modifier.width(8.dp))
                     Text(
@@ -2128,6 +2238,60 @@ fun TimedPastPaperSimulatorScreen(
                       color = Color.White,
                       fontSize = 12.5.sp
                     )
+                  }
+                }
+              }
+
+              Spacer(modifier = Modifier.height(12.dp))
+
+              // OMR Quick Answer Sheet Row synced with active selection
+              Surface(
+                shape = RoundedCornerShape(10.dp),
+                color = Color(0xFF0F172A),
+                border = BorderStroke(1.dp, Color(0xFF334155)),
+                modifier = Modifier.fillMaxWidth()
+              ) {
+                Column(
+                  modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 12.dp, vertical = 10.dp),
+                  verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                  Text(
+                    text = "OMR පිළිතුරු තේරීම:",
+                    color = Color(0xFFBAE6FD),
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.Bold
+                  )
+                  Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                  ) {
+                    for (optIdx in 0..3) {
+                      val isBubbled = studentAnswers[currentQ.id] == optIdx
+                      Surface(
+                        onClick = { studentAnswers[currentQ.id] = optIdx },
+                        shape = CircleShape,
+                        color = if (isBubbled) Color(0xFF1D4ED8) else Color(0xFF1E293B),
+                        border = BorderStroke(
+                          width = if (isBubbled) 2.dp else 1.dp,
+                          color = if (isBubbled) Color(0xFF60A5FA) else Color(0xFF64748B)
+                        ),
+                        modifier = Modifier
+                          .size(48.dp)
+                          .testTag("timed_omr_bubble_${optIdx + 1}")
+                      ) {
+                        Box(contentAlignment = Alignment.Center) {
+                          Text(
+                            text = "(${optIdx + 1})",
+                            color = Color.White,
+                            fontSize = 12.5.sp,
+                            fontWeight = FontWeight.Bold
+                          )
+                        }
+                      }
+                    }
                   }
                 }
               }
@@ -2143,15 +2307,18 @@ fun TimedPastPaperSimulatorScreen(
                   onClick = { if (currentQuestionIndex > 0) currentQuestionIndex-- },
                   enabled = currentQuestionIndex > 0,
                   shape = RoundedCornerShape(8.dp),
-                  colors = ButtonDefaults.outlinedButtonColors(contentColor = Color.White)
+                  colors = ButtonDefaults.outlinedButtonColors(contentColor = Color.White),
+                  modifier = Modifier
+                    .defaultMinSize(minHeight = 48.dp)
+                    .testTag("timed_prev_button")
                 ) {
-                  Text("⬅️ පෙර ප්‍රශ්නය", fontSize = 11.sp)
+                  Text("⬅️ පෙර ප්‍රශ්නය", fontSize = 11.5.sp, fontWeight = FontWeight.SemiBold)
                 }
 
                 Text(
                   text = "Q ${currentQuestionIndex + 1} / ${questionsList.size}",
                   color = Color(0xFF38BDF8),
-                  fontSize = 11.sp,
+                  fontSize = 12.sp,
                   fontWeight = FontWeight.Bold
                 )
 
@@ -2159,9 +2326,20 @@ fun TimedPastPaperSimulatorScreen(
                   Button(
                     onClick = { currentQuestionIndex++ },
                     shape = RoundedCornerShape(8.dp),
-                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF0284C7))
+                    colors = ButtonDefaults.buttonColors(
+                      containerColor = Color(0xFF1D4ED8),
+                      contentColor = Color.White
+                    ),
+                    modifier = Modifier
+                      .defaultMinSize(minHeight = 48.dp)
+                      .testTag("timed_next_button")
                   ) {
-                    Text("ඊළඟ ප්‍රශ්නය ➔", fontSize = 11.sp)
+                    Text(
+                      text = "ඊළඟ →",
+                      color = Color.White,
+                      fontSize = 12.5.sp,
+                      fontWeight = FontWeight.Bold
+                    )
                   }
                 } else {
                   Button(
@@ -2170,9 +2348,15 @@ fun TimedPastPaperSimulatorScreen(
                       isExamFinished = true
                     },
                     shape = RoundedCornerShape(8.dp),
-                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF10B981))
+                    colors = ButtonDefaults.buttonColors(
+                      containerColor = Color(0xFF059669),
+                      contentColor = Color.White
+                    ),
+                    modifier = Modifier
+                      .defaultMinSize(minHeight = 48.dp)
+                      .testTag("timed_submit_button")
                   ) {
-                    Text("පිළිතුරු භාරදෙන්න ✅", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                    Text("පිළිතුරු භාරදෙන්න ✅", color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.Bold)
                   }
                 }
               }
@@ -2229,9 +2413,15 @@ fun TimedPastPaperSimulatorScreen(
                   isExamRunning = false
                 },
                 shape = RoundedCornerShape(8.dp),
-                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF0284C7))
+                colors = ButtonDefaults.buttonColors(
+                  containerColor = Color(0xFF0284C7),
+                  contentColor = Color.White
+                ),
+                modifier = Modifier
+                  .defaultMinSize(minHeight = 48.dp)
+                  .testTag("timed_retry_button")
               ) {
-                Text("නැවත විභාගයක් කරන්න 🔄", fontSize = 11.5.sp)
+                Text("නැවත විභාගයක් කරන්න 🔄", color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.Bold)
               }
             }
           }

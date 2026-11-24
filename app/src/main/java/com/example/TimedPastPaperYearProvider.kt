@@ -14,14 +14,14 @@ object TimedPastPaperYearProvider {
     val yearInt = year.filter { it.isDigit() }.toIntOrNull() ?: 2024
     val normSubject = when {
       subject.contains("භූගෝල") -> "geography"
-      subject.contains("විද්‍යා") && !subject.contains("භූගෝල") -> "science"
+      subject.contains("විද්‍යා") && !subject.contains("භූගෝල") && !subject.contains("කෘෂි") -> "science"
       subject.contains("ගණිත") -> "math"
       subject.contains("ඉතිහාස") -> "history"
       subject.contains("සිංහල") -> "sinhala"
       subject.contains("ඉංග්‍රීසි") -> "english"
       subject.contains("බුද්ධ") -> "buddhism"
       subject.contains("ICT") || subject.contains("තොරතුරු") -> "ict"
-      subject.contains("වාණිජ") || subject.contains("ගිණුම්") -> "commerce"
+      subject.contains("ව්‍යාපාර") || subject.contains("වාණිජ") || subject.contains("ගිණුම්") || subject.contains("Commerce", ignoreCase = true) -> "commerce"
       subject.contains("පුරවැසි") -> "civics"
       subject.contains("සෞඛ්‍ය") -> "health"
       subject.contains("කෘෂි") -> "agriculture"

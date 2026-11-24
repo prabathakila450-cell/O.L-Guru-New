@@ -1742,7 +1742,7 @@ fun Grade10And11MathQuizMasterScreen(
   var searchQuery by remember { mutableStateOf("") }
 
   val context = LocalContext.current
-  val prefs = remember { context.getSharedPreferences("math_quiz_master_scores", Context.MODE_PRIVATE) }
+  var completionVersion by remember { mutableIntStateOf(0) }
 
   // When a set is selected, load its 25 questions
   fun startQuiz(setNum: Int) {
@@ -1753,15 +1753,17 @@ fun Grade10And11MathQuizMasterScreen(
 
   // Check if student has taken a set before and retrieve score
   fun getBestScore(grade: Int, setNum: Int): Int {
-    return prefs.getInt("score_g${grade}_s$setNum", -1)
+    return CompletionTrackingStore.getMathSetBestScore(context, grade, setNum)
   }
 
   fun saveScore(result: MathQuizResult) {
-    val key = "score_g${result.grade}_s${result.setNumber}"
-    val old = prefs.getInt(key, -1)
-    if (result.correctAnswers > old) {
-      prefs.edit().putInt(key, result.correctAnswers).apply()
-    }
+    CompletionTrackingStore.markMathSetCompleted(
+      context = context,
+      grade = result.grade,
+      setNum = result.setNumber,
+      score = result.correctAnswers
+    )
+    completionVersion++
   }
 
   // If a quiz is active, render Fullscreen Mode
@@ -1950,8 +1952,12 @@ fun Grade10And11MathQuizMasterScreen(
       }
 
       items((1..80).toList()) { setNum ->
-        val bestScore = getBestScore(selectedGradeTab, setNum)
-        val isCompleted = bestScore >= 0
+        val bestScore = remember(selectedGradeTab, setNum, completionVersion) {
+          getBestScore(selectedGradeTab, setNum)
+        }
+        val isCompleted = remember(selectedGradeTab, setNum, completionVersion) {
+          CompletionTrackingStore.isMathSetCompleted(context, selectedGradeTab, setNum)
+        }
         val gradePrimary = if (selectedGradeTab == 10) Color(0xFF0284C7) else Color(0xFF16A34A)
 
         Card(
@@ -2049,9 +2055,17 @@ fun Grade10And11MathQuizMasterScreen(
 
             Row(
               modifier = Modifier.fillMaxWidth(),
-              horizontalArrangement = Arrangement.End,
+              horizontalArrangement = if (isCompleted) Arrangement.SpaceBetween else Arrangement.End,
               verticalAlignment = Alignment.CenterVertically
             ) {
+              if (isCompleted) {
+                Text(
+                  text = "✅ අවසන් කළා",
+                  fontSize = 9.5.sp,
+                  fontWeight = FontWeight.Bold,
+                  color = Color(0xFF15803D)
+                )
+              }
               Text(
                 text = if (isCompleted) "නැවත කරන්න >" else "ආරම්භ කරන්න >",
                 fontSize = 10.sp,

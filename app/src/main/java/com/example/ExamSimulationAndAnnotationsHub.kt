@@ -214,6 +214,15 @@ val liveExamSubjectsList = listOf(
     badge = "ප්‍රශ්න පත්‍ර 30",
     papersCountDesc = "වාරයකට පත්‍ර 30 • ප්‍රශ්න 60 බැගින්",
     syllabusSummaryBrief = "උඩරට හා පහතරට නර්තන, බෙර වාදනය, රංග කලාව"
+  ),
+  LiveExamSubjectInfo(
+    subjectName = "චිත්‍ර කලාව",
+    subjectEnglish = "Art",
+    icon = "🎨",
+    color = Color(0xFFD97706),
+    badge = "ප්‍රශ්න පත්‍ර 30",
+    papersCountDesc = "වාරයකට පත්‍ර 30 • ප්‍රශ්න 60 බැගින්",
+    syllabusSummaryBrief = "දේශීය හා විදේශීය චිත්‍ර-මූර්ති, වර්ණ න්‍යාය, ප්‍රායෝගික ශිල්ප"
   )
 )
 
@@ -318,6 +327,12 @@ fun LiveMockExamHallScreen(
   onOpenPdfModal: (url: String, title: String) -> Unit = { _, _ -> },
   onOpenMistakeNotebook: () -> Unit = {}
 ) {
+  val context = LocalContext.current
+  val completedExamIds = remember {
+    mutableStateMapOf<String, Boolean>().apply {
+      CompletionTrackingStore.getCompletedLiveExamIds(context).forEach { put(it, true) }
+    }
+  }
   val availableGrades = listOf("11", "10")
   var selectedGrade by remember(grade) {
     val clean = if (grade.contains("10")) "10" else "11"
@@ -960,6 +975,7 @@ fun LiveMockExamHallScreen(
             items(filteredExams) { exam ->
               LiveMockExamPaperCard(
                 exam = exam,
+                isCompleted = completedExamIds[exam.id] == true,
                 onOpenPdf = { exam.pdfUri?.let { onOpenPdfModal(it, exam.titleSinhala) } },
                 onStartExam = { selectedExam = exam }
               )
@@ -973,7 +989,11 @@ fun LiveMockExamHallScreen(
     ActiveMockExamSession(
       exam = selectedExam!!,
       onExit = { selectedExam = null },
-      onOpenMistakeNotebook = onOpenMistakeNotebook
+      onOpenMistakeNotebook = onOpenMistakeNotebook,
+      onExamCompleted = { finishedExamId ->
+        CompletionTrackingStore.markLiveExamCompleted(context, finishedExamId)
+        completedExamIds[finishedExamId] = true
+      }
     )
   }
 }
@@ -981,6 +1001,7 @@ fun LiveMockExamHallScreen(
 @Composable
 fun LiveMockExamPaperCard(
   exam: MockExamPaper,
+  isCompleted: Boolean = false,
   onOpenPdf: () -> Unit,
   onStartExam: () -> Unit
 ) {
@@ -1075,6 +1096,22 @@ fun LiveMockExamPaperCard(
             maxLines = 1,
             overflow = TextOverflow.Ellipsis
           )
+        }
+        if (isCompleted) {
+          Spacer(modifier = Modifier.width(6.dp))
+          Surface(
+            shape = RoundedCornerShape(6.dp),
+            color = Color(0xFFDCFCE7),
+            border = BorderStroke(1.dp, Color(0xFF86EFAC))
+          ) {
+            Text(
+              text = "✅ අවසන් කළා",
+              fontSize = 9.5.sp,
+              fontWeight = FontWeight.Bold,
+              color = Color(0xFF15803D),
+              modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+            )
+          }
         }
       }
 
@@ -1199,7 +1236,8 @@ fun LiveMockExamPaperCard(
 fun ActiveMockExamSession(
   exam: MockExamPaper,
   onExit: () -> Unit,
-  onOpenMistakeNotebook: () -> Unit = {}
+  onOpenMistakeNotebook: () -> Unit = {},
+  onExamCompleted: (String) -> Unit = {}
 ) {
   val context = LocalContext.current
   val screenDims = rememberScreenDimensions()
@@ -1215,8 +1253,12 @@ fun ActiveMockExamSession(
   var isFullScreenMode by remember { mutableStateOf(false) }
   var mistakesSavedToNotebook by remember { mutableStateOf(false) }
 
-  // Auto-save wrong questions to Mistake Notebook upon exam submission
+  // Mark exam completed & auto-save wrong questions to Mistake Notebook upon exam submission
   LaunchedEffect(isExamSubmitted) {
+    if (isExamSubmitted) {
+      CompletionTrackingStore.markLiveExamCompleted(context, exam.id)
+      onExamCompleted(exam.id)
+    }
     if (isExamSubmitted && !mistakesSavedToNotebook) {
       val wrongList = exam.questions.filter { answersMap[it.id] != it.correctOption }
       if (wrongList.isNotEmpty()) {
@@ -1751,11 +1793,18 @@ fun ActiveMockExamSession(
             horizontalArrangement = Arrangement.spacedBy(if (isCompact) 4.dp else 6.dp),
             verticalAlignment = Alignment.CenterVertically
           ) {
+            val prevEnabled = currentQuestionIndex > 0
             OutlinedButton(
               onClick = {
                 if (currentQuestionIndex > 0) currentQuestionIndex--
               },
-              enabled = currentQuestionIndex > 0,
+              enabled = prevEnabled,
+              colors = ButtonDefaults.outlinedButtonColors(
+                containerColor = Color.White,
+                contentColor = Color(0xFF1E293B),
+                disabledContentColor = Color(0xFF94A3B8)
+              ),
+              border = BorderStroke(1.dp, if (prevEnabled) Color(0xFFCBD5E1) else Color(0xFFE2E8F0)),
               modifier = Modifier
                 .weight(1f)
                 .height(if (isCompact) 32.dp else 36.dp),
@@ -1773,7 +1822,10 @@ fun ActiveMockExamSession(
 
             Button(
               onClick = { showConfirmSubmitDialog = true },
-              colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF16A34A)),
+              colors = ButtonDefaults.buttonColors(
+                containerColor = Color(0xFF15803D),
+                contentColor = Color.White
+              ),
               shape = RoundedCornerShape(8.dp),
               modifier = Modifier
                 .weight(1.3f)
@@ -1795,14 +1847,20 @@ fun ActiveMockExamSession(
                 if (currentQuestionIndex < exam.questions.size - 1) currentQuestionIndex++
               },
               enabled = currentQuestionIndex < exam.questions.size - 1,
-              colors = ButtonDefaults.buttonColors(containerColor = BluePrimary),
+              colors = ButtonDefaults.buttonColors(
+                containerColor = Color(0xFF1D4ED8),
+                contentColor = Color.White,
+                disabledContainerColor = Color(0xFFE2E8F0),
+                disabledContentColor = Color(0xFF475569)
+              ),
               shape = RoundedCornerShape(8.dp),
               modifier = Modifier
                 .weight(1f)
-                .height(if (isCompact) 32.dp else 36.dp),
+                .height(if (isCompact) 32.dp else 36.dp)
+                .testTag("next_question_button"),
               contentPadding = PaddingValues(horizontal = 4.dp, vertical = 0.dp)
             ) {
-              Text("ඊළඟ", fontSize = if (isCompact) 9.5.sp else 11.sp, fontWeight = FontWeight.SemiBold)
+              Text("ඊළඟ", fontSize = if (isCompact) 9.5.sp else 11.sp, fontWeight = FontWeight.Bold)
               Spacer(modifier = Modifier.width(2.dp))
               Icon(
                 imageVector = Icons.AutoMirrored.Filled.ArrowForward,
@@ -1971,7 +2029,7 @@ fun ActiveMockExamSession(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.SpaceBetween
               ) {
-                Text("OMR තිත් තැබීම:", fontSize = 10.5.sp, fontWeight = FontWeight.Bold, color = NeutralDark)
+                Text("OMR පිළිතුරු තේරීම:", fontSize = 10.5.sp, fontWeight = FontWeight.Bold, color = NeutralDark)
                 Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                   (1..4).forEach { bNum ->
                     val isSelected = selectedBubble == bNum

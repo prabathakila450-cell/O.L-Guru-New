@@ -75,6 +75,9 @@ object TermPaperUnique60Provider {
       subject.contains("නර්තන") -> {
         BuddhismAndElectivesMockEngine.generateDancingQuestion(grade, term, paperIdx, qNum)
       }
+      subject.contains("චිත්‍ර") || subject.equals("Art", ignoreCase = true) -> {
+        BuddhismAndElectivesMockEngine.generateArtQuestion(grade, term, paperIdx, qNum)
+      }
       else -> {
         ScienceMockQuestionEngine.generateQuestion(grade, term, paperIdx, qNum)
       }
