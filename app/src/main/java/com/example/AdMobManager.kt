@@ -64,6 +64,11 @@ object AdMobManager {
 
   fun initialize(context: Context) {
     if (isInitialized) return
+    if (AppSecurityManager.isDeviceEmulator()) {
+      isInitialized = true
+      Log.d(TAG, "Emulator detected: skipping live AdMob and Audience Network initialization")
+      return
+    }
     isInitialized = true
     val appCtx = context.applicationContext
     CoroutineScope(Dispatchers.IO).launch {
@@ -106,6 +111,7 @@ object AdMobManager {
   }
 
   fun loadInterstitial(context: Context) {
+    if (AppSecurityManager.isDeviceEmulator()) return
     if (interstitialAd != null || isAdLoading) return
     isAdLoading = true
     try {
@@ -153,6 +159,7 @@ object AdMobManager {
    */
   fun startInterstitialTimer(activity: Activity) {
     updateActivity(activity)
+    if (AppSecurityManager.isDeviceEmulator()) return
     if (timerJob?.isActive == true) return
 
     val appContext = activity.applicationContext
@@ -173,6 +180,10 @@ object AdMobManager {
   }
 
   fun showInterstitial(activity: Activity, onAdClosed: (() -> Unit)? = null) {
+    if (AppSecurityManager.isDeviceEmulator()) {
+      onAdClosed?.invoke()
+      return
+    }
     val ad = interstitialAd
     if (ad != null && !activity.isFinishing && !activity.isDestroyed) {
       ad.show(activity)
@@ -192,10 +203,13 @@ object AdMobManager {
 fun TopBannerAdView(
   modifier: Modifier = Modifier
 ) {
+  val isEmulator = remember { AppSecurityManager.isDeviceEmulator() }
   var attachBanner by remember { mutableStateOf(false) }
-  LaunchedEffect(Unit) {
-    delay(1800L)
-    attachBanner = true
+  LaunchedEffect(isEmulator) {
+    if (!isEmulator) {
+      delay(1800L)
+      attachBanner = true
+    }
   }
 
   Box(
@@ -207,7 +221,7 @@ fun TopBannerAdView(
       .testTag("top_banner_ad_container"),
     contentAlignment = Alignment.Center
   ) {
-    if (attachBanner) {
+    if (attachBanner && !isEmulator) {
       AndroidView(
         modifier = Modifier
           .fillMaxWidth()

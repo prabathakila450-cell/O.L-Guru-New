@@ -96,7 +96,69 @@ object TrueFalse500Repository {
   fun getAllQuestions(grade: Int, subject: TrueFalseSubject): List<TrueFalseQuestionItem> {
     val key = "${grade}_${subject.id}"
     return cache.getOrPut(key) {
-      generate500Questions(grade, subject)
+      if (subject == TrueFalseSubject.HISTORY && grade == 11) {
+        HistoryTrueFalseCuratedBank.get500Questions(grade)
+      } else if (subject == TrueFalseSubject.HISTORY && grade == 10) {
+        HistoryG10TrueFalseCuratedBank.get500Questions(grade)
+      } else if (subject == TrueFalseSubject.SCIENCE && grade == 11) {
+        ScienceG11TrueFalseCuratedBank.get500Questions(grade)
+      } else if (subject == TrueFalseSubject.SCIENCE && grade == 10) {
+        ScienceG10TrueFalseCuratedBank.get500Questions(grade)
+      } else if (subject == TrueFalseSubject.MATHEMATICS && grade == 11) {
+        MathsG11TrueFalseCuratedBank.get500Questions(grade)
+      } else if (subject == TrueFalseSubject.MATHEMATICS && grade == 10) {
+        MathsG10TrueFalseCuratedBank.get500Questions(grade)
+      } else if (subject == TrueFalseSubject.SINHALA && grade == 10) {
+        SinhalaG10TrueFalseCuratedBank.get500Questions(grade)
+      } else if (subject == TrueFalseSubject.SINHALA && grade == 11) {
+        SinhalaG11TrueFalseCuratedBank.get500Questions(grade)
+      } else if (subject == TrueFalseSubject.BUDDHISM && grade == 11) {
+        BuddhismG11TrueFalseCuratedBank.get500Questions(grade)
+      } else if (subject == TrueFalseSubject.BUDDHISM && grade == 10) {
+        BuddhismG10TrueFalseCuratedBank.get500Questions(grade)
+      } else if (subject == TrueFalseSubject.ENGLISH && grade == 11) {
+        EnglishG11TrueFalseCuratedBank.get500Questions(grade)
+      } else if (subject == TrueFalseSubject.ENGLISH && grade == 10) {
+        EnglishG10TrueFalseCuratedBank.get500Questions(grade)
+      } else if (subject == TrueFalseSubject.ICT && grade == 11) {
+        IctG11TrueFalseCuratedBank.get500Questions(grade)
+      } else if (subject == TrueFalseSubject.ICT && grade == 10) {
+        IctG10TrueFalseCuratedBank.get500Questions(grade)
+      } else if (subject == TrueFalseSubject.GEOGRAPHY && grade == 11) {
+        GeoG11TrueFalseCuratedBank.get500Questions(grade)
+      } else if (subject == TrueFalseSubject.GEOGRAPHY && grade == 10) {
+        GeoG10TrueFalseCuratedBank.get500Questions(grade)
+      } else if (subject == TrueFalseSubject.CIVICS && grade == 11) {
+        CivicsG11TrueFalseCuratedBank.get500Questions(grade)
+      } else if (subject == TrueFalseSubject.CIVICS && grade == 10) {
+        CivicsG10TrueFalseCuratedBank.get500Questions(grade)
+      } else if (subject == TrueFalseSubject.COMMERCE && grade == 11) {
+        CommerceG11TrueFalseCuratedBank.get500Questions(grade)
+      } else if (subject == TrueFalseSubject.COMMERCE && grade == 10) {
+        CommerceG10TrueFalseCuratedBank.get500Questions(grade)
+      } else if (subject == TrueFalseSubject.HEALTH && grade == 11) {
+        HealthG11TrueFalseCuratedBank.get500Questions(grade)
+      } else if (subject == TrueFalseSubject.HEALTH && grade == 10) {
+        HealthG10TrueFalseCuratedBank.get500Questions(grade)
+      } else if (subject == TrueFalseSubject.DANCING && grade == 11) {
+        DancingG11TrueFalseCuratedBank.get500Questions(grade)
+      } else if (subject == TrueFalseSubject.DANCING && grade == 10) {
+        DancingG10TrueFalseCuratedBank.get500Questions(grade)
+      } else if (subject == TrueFalseSubject.MUSIC && grade == 11) {
+        MusicG11TrueFalseCuratedBank.get500Questions(grade)
+      } else if (subject == TrueFalseSubject.MUSIC && grade == 10) {
+        MusicG10TrueFalseCuratedBank.get500Questions(grade)
+      } else if (subject == TrueFalseSubject.ART && grade == 11) {
+        ArtG11TrueFalseCuratedBank.get500Questions(grade)
+      } else if (subject == TrueFalseSubject.ART && grade == 10) {
+        ArtG10TrueFalseCuratedBank.get500Questions(grade)
+      } else if (subject == TrueFalseSubject.AGRI && grade == 11) {
+        AgriG11TrueFalseCuratedBank.get500Questions(grade)
+      } else if (subject == TrueFalseSubject.AGRI && grade == 10) {
+        AgriG10TrueFalseCuratedBank.get500Questions(grade)
+      } else {
+        generate500Questions(grade, subject)
+      }
     }
   }
 
@@ -176,6 +238,9 @@ object TrueFalse500Repository {
 
     return questions
   }
+
+
+
 
   /**
    * Ensures exactly 20 categories, each having at least 25 distinct syllabus fact points.

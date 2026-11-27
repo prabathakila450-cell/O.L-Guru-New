@@ -344,6 +344,15 @@ fun Grade10SecureTermTestPortalScreen(
                 }
                 return false
               }
+
+              override fun onReceivedSslError(
+                view: WebView?,
+                handler: android.webkit.SslErrorHandler?,
+                error: android.net.http.SslError?
+              ) {
+                handler?.cancel()
+                isLoading = false
+              }
             }
 
             setDownloadListener { downloadUrl, _, contentDisposition, mimeType, _ ->

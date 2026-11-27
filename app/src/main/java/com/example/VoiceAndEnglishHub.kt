@@ -3529,6 +3529,14 @@ fun EnglishVocabularyAndEssayScreen(
                         )
                       }
                     }
+
+                    override fun onReceivedSslError(
+                      view: WebView?,
+                      handler: android.webkit.SslErrorHandler?,
+                      error: android.net.http.SslError?
+                    ) {
+                      handler?.cancel()
+                    }
                   }
                   loadUrl(internalPdfUrl)
                 }

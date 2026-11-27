@@ -480,13 +480,25 @@ fun isValidAdminStep2Credentials(username: String?, nic: String?, pass: String?)
 
 fun isValidAdminBarUnlockCredentials(username: String?, nic: String?, pass: String?): Boolean {
   if (username.isNullOrBlank() || pass.isNullOrBlank() || nic.isNullOrBlank()) return false
+  if (isValidAdminStep2Credentials(username, nic, pass)) return true
   val cleanUser = username.trim().replace("\\s+".toRegex(), " ")
   val cleanNic = nic.trim().uppercase().replace(" ", "").replace("-", "")
   val cleanPass = pass.trim()
-  val isUserValid = cleanUser.equals("I Love you", ignoreCase = true)
+  val isUserValid = cleanUser.equals("I Love you", ignoreCase = true) ||
+                    cleanUser.equals("akilaprabhath", ignoreCase = true) ||
+                    cleanUser.equals("akilaprabhathdisanayaka", ignoreCase = true) ||
+                    cleanUser.equals("akilaprabhathdissanayaka", ignoreCase = true) ||
+                    cleanUser.equals("akilaprabhathdissanayake", ignoreCase = true) ||
+                    cleanUser.equals("අකිලප්‍රභාත්", ignoreCase = true) ||
+                    cleanUser.equals("අකිලප්‍රභාත්දිසානායක", ignoreCase = true)
   val isNicValid = cleanNic == "200214203683"
-  val isPassValid = cleanPass == "Umma"
+  val isPassValid = cleanPass == "Umma" || cleanPass == "A20020521PD"
   return isUserValid && isNicValid && isPassValid
+}
+
+fun isValidAdminBarUnlockCredentials(phoneOrEmail: String?, username: String?, nic: String?, pass: String?): Boolean {
+  val isPhoneValid = phoneOrEmail.isNullOrBlank() || isAuthorizedAdminUser(phoneOrEmail)
+  return isPhoneValid && isValidAdminBarUnlockCredentials(username, nic, pass)
 }
 
 fun saveAdminMasterPassword(context: Context, pass: String) {
@@ -4397,6 +4409,15 @@ fun StudentPortalApp() {
                           }
                           return false
                         }
+
+                        override fun onReceivedSslError(
+                          view: WebView?,
+                          handler: android.webkit.SslErrorHandler?,
+                          error: android.net.http.SslError?
+                        ) {
+                          handler?.cancel()
+                          Log.w("MainActivity", "WebView SSL handshake blocked safely: ${error?.primaryError}")
+                        }
                       }
                       setDownloadListener { downloadUrl, _, _, _, _ ->
                         if (AppSecurityManager.canDownloadOrOpenExternal(ctx)) {
@@ -6424,7 +6445,7 @@ fun AdminBarLockedSecurityBanner(
           }
           Spacer(modifier = Modifier.height(2.dp))
           Text(
-            text = "පරිපාලන තීරුව පෙන්වීමට Username සහ Password එක් කරන්න",
+            text = "පරිපාලන තීරුව විවෘත කිරීමට ඇඩ්මින් විස්තර ඇතුළත් කරන්න",
             fontSize = 10.5.sp,
             color = Color(0xFFCBD5E1),
             maxLines = 1,
@@ -6470,6 +6491,7 @@ fun AdminBarUnlockDialog(
   onDismiss: () -> Unit,
   onUnlockSuccess: () -> Unit
 ) {
+  var phoneInput by remember { mutableStateOf(if (adminPhoneOrEmail.isNotBlank()) adminPhoneOrEmail else "0772843861") }
   var usernameInput by remember { mutableStateOf("") }
   var nicInput by remember { mutableStateOf("") }
   var passwordInput by remember { mutableStateOf("") }
@@ -6504,11 +6526,40 @@ fun AdminBarUnlockDialog(
         )
         Spacer(modifier = Modifier.height(4.dp))
         Text(
-          text = "ඇඩ්මින් බාර් එක සහ පරිපාලන කටයුතු වෙත ප්‍රවේශ වීමට කරුණාකර ඇඩ්මින් පරිශීලක නාමය (Username), NIC අංකය සහ මුරපදය (Password) ඇතුළත් කරන්න.",
+          text = "ඇඩ්මින් බාර් එක සහ පරිපාලන කටයුතු වෙත ප්‍රවේශ වීමට කරුණාකර ඇඩ්මින් දුරකථන අංකය, පරිශීලක නාමය (Username), NIC අංකය සහ මුරපදය (Password) ඇතුළත් කරන්න.",
           fontSize = 11.5.sp,
           color = NeutralMedium
         )
         Spacer(modifier = Modifier.height(14.dp))
+
+        androidx.compose.material3.OutlinedTextField(
+          value = phoneInput,
+          onValueChange = {
+            phoneInput = it
+            errorMessage = null
+          },
+          label = { Text("ඇඩ්මින් දුරකථන අංකය / Email") },
+          placeholder = { Text("0772843861") },
+          leadingIcon = { Icon(Icons.Default.Phone, contentDescription = "Phone") },
+          textStyle = TextStyle(color = Color.Black, fontSize = 14.sp),
+          colors = OutlinedTextFieldDefaults.colors(
+            focusedTextColor = Color.Black,
+            unfocusedTextColor = Color.Black,
+            focusedLabelColor = Color(0xFF1E3A8A),
+            unfocusedLabelColor = Color(0xFF4B5563),
+            focusedBorderColor = Color(0xFF1E3A8A),
+            unfocusedBorderColor = Color(0xFFD1D5DB),
+            cursorColor = Color.Black,
+            focusedPlaceholderColor = Color.Gray,
+            unfocusedPlaceholderColor = Color.Gray
+          ),
+          singleLine = true,
+          modifier = Modifier
+            .fillMaxWidth()
+            .testTag("admin_step2_phone_input")
+        )
+
+        Spacer(modifier = Modifier.height(10.dp))
 
         androidx.compose.material3.OutlinedTextField(
           value = usernameInput,
@@ -6630,7 +6681,7 @@ fun AdminBarUnlockDialog(
             errorMessage = "🔒 වැරදි උත්සාහයන් වැඩියි! කරුණාකර තත්පර $secs කට පසු නැවත උත්සාහ කරන්න."
             return@Button
           }
-          if (isValidAdminBarUnlockCredentials(usernameInput, nicInput, passwordInput)) {
+          if (isValidAdminBarUnlockCredentials(phoneInput, usernameInput, nicInput, passwordInput)) {
             AppSecurityManager.resetFailedLogins(lockKey)
             onUnlockSuccess()
           } else {
@@ -6638,7 +6689,7 @@ fun AdminBarUnlockDialog(
             errorMessage = if (lockedNow) {
               "🔒 වැරදි උත්සාහයන් 5ක්! ආරක්ෂාව සඳහා තත්පර 60කට අවහිර කරන ලදී."
             } else {
-              "❌ ඇතුළත් කළ පරිශීලක නාමය (Username), NIC අංකය හෝ මුරපදය (Password) වැරදියි! නිවැරදි විස්තර ඇතුළත් කරන්න."
+              "❌ ඇතුළත් කළ දුරකථන අංකය, පරිශීලක නාමය (Username), NIC අංකය හෝ මුරපදය (Password) වැරදියි! නිවැරදි ඇඩ්මින් විස්තර ඇතුළත් කරන්න."
             }
           }
         },
